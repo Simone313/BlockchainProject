@@ -17,6 +17,8 @@ public class FabricOrganizationServerThread extends Thread{
     
     public void run(){
         Blockchain.executeWSLCommand("cd Prova/"+directory+" &&"
-                + "./fabric-ca-server start");
+                + "docker compose down");
+        Blockchain.executeWSLCommand("cd Prova/"+directory+" &&"
+                + "docker compose up");
     }
 }

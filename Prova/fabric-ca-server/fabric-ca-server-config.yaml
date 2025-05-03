@@ -1,5 +1,5 @@
 version: v1.5.15
-port: 7054
+port: 7055
 cors:
   enabled: false
   origins:
@@ -8,8 +8,8 @@ debug: false
 crlsizelimit: 512000
 tls:
   enabled: true
-  certfile: null
-  keyfile: null
+  certfile: fabric-ca-client/tls-ca/rcaadmin/msp/signcerts/cert.pem
+  keyfile: fabric-ca-client/tls-ca/rcaadmin/msp/keystore
   clientauth:
     type: noclientcert
     certfiles: null

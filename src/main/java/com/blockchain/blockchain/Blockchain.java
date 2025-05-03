@@ -13,6 +13,8 @@ import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.DumperOptions;
 import java.io.*;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -78,7 +80,9 @@ public class Blockchain {
 
             enrollRequestToCAServer(0);
             enrollCAAdmin(0);
-            registerNewIdentity(0);
+            String userName=registerNewIdentity(0);
+            deployOrganizationCA(0, userName);
+            new FabricOrganizationServerThread(0);
             
             
             /*for(int j=0;j<num_org;j++){
@@ -142,7 +146,7 @@ public class Blockchain {
 
 
     
-    private static void registerNewIdentity(int i){
+    private static String registerNewIdentity(int i){
         
         Scanner in = new Scanner(System.in);
         System.out.print("Organization CA bootstrap identity name: ");
@@ -165,7 +169,7 @@ public class Blockchain {
 
                           
               
-    
+        return n;
     }
     
     private static void registerIntermediateCAAdmin(int i){
@@ -342,7 +346,7 @@ public class Blockchain {
         
     }
     
-    private static void deployOrganizationCA(int i) throws FileNotFoundException, IOException{
+    private static void deployOrganizationCA(int i, String user_name) throws FileNotFoundException, IOException{
         String server_name= "fabric-ca-server-org"+(i+1);
         
         executeWSLCommand("cd "+mainDirectory+" &&"
@@ -353,8 +357,8 @@ public class Blockchain {
                 + "mkdir tls &&"
                 + "cd .. &&"
                 + "cd .. &&"
-                + "mv "+mainDirectory+"/fabric-ca-client/tls-ca/rcaadmin/msp/keystore/* "+mainDirectory+"/fabric-ca-client/tls-ca/rcaadmin/msp/keystore/key.pem &&"
-                + "cp "+mainDirectory+"/fabric-ca-client/tls-ca/rcaadmin/msp/signcerts/cert.pem tls && cp "+mainDirectory+"/fabric-ca-client/tls-ca/rcaadmin/msp/keystore/key.pem tls");
+                + "cp "+mainDirectory+"/fabric-ca-client/tls-ca/users/"+user_name+"/msp/* "+mainDirectory+"/fabric-ca-client/tls-ca/rcaadmin/msp/ "
+                /*+ "cp "+mainDirectory+"/fabric-ca-client/tls-ca/users/"+user_name+"/msp/signcerts/cert.pem tls && cp "+mainDirectory+"/fabric-ca-client/tls-ca/rcaadmin/msp/keystore/key.pem tls"*/);
         
         executeWSLCommand("cd "+mainDirectory+"/"+server_name+" &&"
                 + "./fabric-ca-server init -b "+admin_name+":"+admin_pwd);
@@ -374,9 +378,11 @@ public class Blockchain {
             //TLS
             System.out.println("Do you want to enable TLS? s/n");
             String risp=in.next();
+            boolean tlsEn=false;
             if(risp.equals("n")){
                 
             }else{
+                tlsEn=true;
                 Map<String,Object> tls=(Map<String,Object>) data.get("tls");
                 tls.put("enabled",true);
                 
@@ -474,6 +480,38 @@ public class Blockchain {
                 yamlWriter.dump(data, writer);
             }
             System.out.println("Config updated");
+            
+            addOrganizationCAtoDocker(CA_name, tlsEn, server_port, server_name);
+            
+    }
+    
+    
+    private static void addOrganizationCAtoDocker(String name, boolean tls, int port, String serverName) throws FileNotFoundException, IOException{
+        Yaml yaml= new Yaml();
+        File file= new File(""+ mainDirectory +"/docker-compose.yaml");
+        Map<String, Object> data = yaml.load(new FileInputStream(file));
+        Map<String, Object> services = (Map<String, Object>) data.get("services");
+        
+        //add organization CA service
+        Map<String, Object> caOrg1 = new LinkedHashMap<>();
+        caOrg1.put("image", "hyperledger/fabric-ca");
+        caOrg1.put("environment", Arrays.asList(
+            "FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server",
+            "FABRIC_CA_SERVER_CA_NAME="+name,
+            "FABRIC_CA_SERVER_TLS_ENABLED="+tls
+        ));
+        caOrg1.put("ports", Collections.singletonList(port+":"+port));
+        caOrg1.put("command", "sh -c 'fabric-ca-server start -b "+ admin_name+":"+admin_pwd+" -d'");
+        caOrg1.put("volumes", Collections.singletonList("/mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova"+serverName+"/msp/keystore:/etc/hyperledger/fabric-ca-server"));
+        services.put(serverName, caOrg1);
+        
+        DumperOptions options = new DumperOptions();
+        options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+        options.setPrettyFlow(true);
+
+        yaml = new Yaml(options);
+        FileWriter writer = new FileWriter(file);
+        yaml.dump(data, writer);
     }
     
     
