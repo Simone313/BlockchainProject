@@ -37,7 +37,7 @@ registry:
       hf.Registrar.Attributes: '*'
       hf.AffiliationMgr: true
 db:
-  type: sqlite3
+  type: postgres
   datasource: fabric-ca-server.db
   tls:
     enabled: false

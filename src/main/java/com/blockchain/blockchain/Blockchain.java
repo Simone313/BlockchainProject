@@ -64,10 +64,24 @@ public class Blockchain {
                     + "cp bin/fabric-ca-client fabric-ca-client &&"
                     + "cd fabric-ca-client &&"
                     + "mkdir tls-ca org1-ca int-ca tls-root-cert");
-            System.out.println("How many organizations do you want to distribute?");
-            int num_org=in.nextInt();
+            //System.out.println("How many organizations do you want to distribute?");
+            //int num_org=in.nextInt();
+            setupCA_TLS(0);
+            createDockerComposeYaml();
             
-            for(int j=0;j<num_org;j++){
+            new FabricServerThread(0);
+            try {
+                    Thread.sleep(5000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
+            enrollRequestToCAServer(0);
+            enrollCAAdmin(0);
+            registerNewIdentity(0);
+            
+            
+            /*for(int j=0;j<num_org;j++){
                 setupCA_TLS(j);
                 FabricServerThread serverCA=new FabricServerThread(j);
                 try {
@@ -87,7 +101,7 @@ public class Blockchain {
                 deployOrganizationCA(j);
                 serverCA.kill();
                 new FabricOrganizationServerThread(j);
-            }
+            }*/
             
             
         }
@@ -101,24 +115,55 @@ public class Blockchain {
                 + "cd tlsadmin &&"
                 + "mkdir msp");
         executeWSLCommand("cd "+ mainDirectory +"/fabric-ca-client &&"
-                + "export FABRIC_CA_CLIENT_HOME=$PWD &&"
-                + "./fabric-ca-client enroll -d -u https://"+server_list.get(i).getAdmin()+":"+server_list.get(i).getAdminPwd()+"@localhost:7054 --tls.certfiles "+ mainDirectory +"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem --enrollment.profile tls --mspdir "+ mainDirectory +"/fabric-ca-client/tls-ca/tlsadmin/msp");
+                + "./fabric-ca-client enroll -d -u https://"+server_list.get(i).getAdmin()+":"+server_list.get(i).getAdminPwd()+"@127.0.0.1:7054 --tls.certfiles $(pwd)/Prova/fabric-ca-client/tls-root-cert/tls-ca-cert.pem --enrollment.profile tls --mspdir "+ mainDirectory +"/fabric-ca-client/tls-ca/tlsadmin/msp");
     }
     
+    private static void enrollCAAdmin(int i) {
+    String caAdmin = server_list.get(i).getAdmin();
+    String caAdminPwd = server_list.get(i).getAdminPwd();
+    
+    String fabricCaClientDir = mainDirectory + "/fabric-ca-client";
+    String clientHome = fabricCaClientDir + "/tls-ca/rcaadmin";
+    executeWSLCommand("mkdir -p " + fabricCaClientDir + "/tls-ca/rcaadmin/msp");
+    String enrollCmd =
+    "cd " + mainDirectory + "/fabric-ca-client && " +
+    "export FABRIC_CA_CLIENT_HOME=$(pwd)/tls-ca/rcaadmin && " +
+    "./fabric-ca-client enroll -d " +
+    "-u https://" + caAdmin + ":" + caAdminPwd + "@127.0.0.1:7054 " +
+    "--tls.certfiles $(pwd)/Prova/fabric-ca-client/tls-root-cert/tls-ca-cert.pem";
+
+
+    executeWSLCommand(enrollCmd);
+    
+    executeWSLCommand("cp -r $(pwd)/tls-ca/rcaadmin/Prova/fabric-ca-client/tls-ca/rcaadmin/* $(pwd)/Prova/fabric-ca-client/tls-ca/rcaadmin");
+    
+    }
+
+
+
+    
     private static void registerNewIdentity(int i){
+        
         Scanner in = new Scanner(System.in);
         System.out.print("Organization CA bootstrap identity name: ");
         String n= in.next();
         System.out.print("Organization CA bootstrap identity password: ");
         String p= in.next();
+        executeWSLCommand("cd "+ mainDirectory +"/fabric-ca-client/tls-ca &&"
+                + "mkdir users &&"
+                + "cd users &&"
+                + "mkdir "+n+" &&"
+                + "cd "+n+" &&"
+                + "mkdir msp");
         executeWSLCommand("cd "+ mainDirectory +"/fabric-ca-client &&"
-                + "export FABRIC_CA_CLIENT_HOME=$(pwd) &&"
-                + "./fabric-ca-client enroll -d -u https://"+n+":"+p+"@localhost:7054 --tls --csr.hosts '"+server_list.get(i).getCsrHosts().get(0)+","+server_list.get(i).getCsrHosts().get(1)+"' --mspdir "+ mainDirectory +"/fabric-ca-client/tls-ca/rcaadmin/msp");
+                + "export FABRIC_CA_CLIENT_HOME=$(pwd)/tls-ca/rcaadmin &&"
+                + "./fabric-ca-client register -d --id.name "+n+" --id.secret "+p+" -u https://127.0.0.1:7054 --tls.certfiles $(pwd)/Prova/fabric-ca-client/tls-root-cert/tls-ca-cert.pem");       
 
         executeWSLCommand("cd "+ mainDirectory +"/fabric-ca-client &&"
                 + "export FABRIC_CA_CLIENT_HOME=$(pwd) &&"
-                + "./fabric-ca-client register -d --id.name "+n+" --id.secret "+p+" -u https://localhost:7054 --tls.certfiles "+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem --mspdir "+mainDirectory+"/fabric-ca-client/tls-ca/rcaadmin/msp");       
-                  
+                + "./fabric-ca-client enroll -d -u https://"+n+":"+p+"@127.0.0.1:7054 --tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem --csr.hosts '"+server_list.get(i).getCsrHosts().get(0)+","+server_list.get(i).getCsrHosts().get(1)+"' --mspdir "+ mainDirectory +"/fabric-ca-client/tls-ca/users/"+n+"/msp");
+
+                          
               
     
     }
@@ -135,6 +180,28 @@ public class Blockchain {
                 + "./fabric-ca-client +enroll -d -u https://"+n+":"+p+"@localhost:7054 --tls --csr.hosts '"+server_list.get(i).getCsrHosts().get(0)+","+server_list.get(i).getCsrHosts().get(1)+" --mspdir "+ mainDirectory +"/fabric-ca-client/tls-ca/icaadmin/msp");
     }
     
+    private static void createDockerComposeYaml(){
+        executeWSLCommand("cd "+mainDirectory+" &&"
+                + "cat > $(pwd)/Prova/docker-compose.yaml << 'EOF'\n" +
+                "version: '3'\n" +
+                "services:\n" +
+                "  ca_server:\n" +
+                "    image: hyperledger/fabric-ca:1.5\n" +
+                "    container_name: ca_server\n" +
+                "    ports:\n" +
+                "      - \"7054:7054\"\n" +
+                "    environment:\n" +
+                "      - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server\n" +
+                "      - FABRIC_CA_SERVER_CA_NAME=ca-server\n" +
+                "      - FABRIC_CA_SERVER_TLS_ENABLED=true\n" +
+                "      - FABRIC_CA_SERVER_TLS_CERTFILE=/etc/hyperledger/fabric-ca-server-config/tls-ca-cert.pem\n" +
+                "      - FABRIC_CA_SERVER_TLS_KEYFILE=/etc/hyperledger/fabric-ca-server-config/CA_PRIVATE_KEY\n" +
+                "    volumes:\n" +
+                "      - $(pwd)/Prova/fabric-ca-server/msp/keystore:/etc/hyperledger/fabric-ca-server-config\n" +
+                "    command: sh -c 'fabric-ca-server start -b"+ admin_name+":"+admin_pwd+" -d'\n"+
+                "EOF");
+    }
+    
     private static void setupCA_TLS(int i) throws FileNotFoundException, IOException{
         try{
             String fabric_ca_server_name="fabric-ca-server"+(i==0? "":"(i+1)");
@@ -148,8 +215,12 @@ public class Blockchain {
             System.out.print("Admin's password: ");
             admin_pwd=in.next();
             executeWSLCommand("cd "+ mainDirectory +"/"+fabric_ca_server_name+" &&"
-                    + "./fabric-ca-server init -b "+admin_name+":"+admin_pwd);
+                    + "./fabric-ca-server init -b "+admin_name+":"+admin_pwd+" --csr.hosts localhost,127.0.0.1");
             executeWSLCommand("cp "+ mainDirectory +"/"+fabric_ca_server_name+"/ca-cert.pem "+ mainDirectory +"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem");
+            executeWSLCommand("cp "+ mainDirectory +"/"+fabric_ca_server_name+"/ca-cert.pem "+ mainDirectory +"/fabric-ca-server/msp/keystore/tls-ca-cert.pem");
+            String old_name=executeWSLCommandToString("find $(pwd)/Prova/fabric-ca-server/msp -name '*_sk'");
+            System.out.println("old_name:"+old_name);
+            executeWSLCommand("mv "+old_name+" $(pwd)/Prova/fabric-ca-server/msp/keystore/CA_PRIVATE_KEY");
             System.out.println("------Modify the TLS CA server configuration------");
             
             
@@ -644,9 +715,9 @@ public class Blockchain {
             BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
             String line;
             System.out.println(">>> Comando: " + bashCommand);
-            /*while ((line = reader.readLine()) != null) {
+            while ((line = reader.readLine()) != null) {
                 ris=ris+line;
-            }*/
+            }
 
             // Leggi eventuali errori
             BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
