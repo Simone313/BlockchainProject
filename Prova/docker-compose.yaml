@@ -14,14 +14,14 @@ services:
     volumes:
     - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/fabric-ca-server/msp/keystore:/etc/hyperledger/fabric-ca-server-config
     command: sh -c 'fabric-ca-server start -badmin:adminpwd -d'
-  fabric-ca-server-org1:
+  fabric-ca-server-int-ca:
     image: hyperledger/fabric-ca
     environment:
     - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
-    - FABRIC_CA_SERVER_CA_NAME=org1
+    - FABRIC_CA_SERVER_CA_NAME=int1
     - FABRIC_CA_SERVER_TLS_ENABLED=true
     ports:
-    - 7055:7055
+    - 7056:7056
     command: sh -c 'fabric-ca-server start -b admin:adminpwd -d'
     volumes:
-    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Provafabric-ca-server-org1/msp/keystore:/etc/hyperledger/fabric-ca-server
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Provafabric-ca-server-int-ca/msp/keystore:/etc/hyperledger/fabric-ca-server
