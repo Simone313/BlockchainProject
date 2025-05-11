@@ -10,9 +10,14 @@ package com.blockchain.blockchain;
  */
 public class FabricOrganizationServerThread extends Thread{
     String directory;
-    public FabricOrganizationServerThread(int i){
+    String name;
+    String psw;
+    public FabricOrganizationServerThread(int i, String name, String psw){
         directory="fabric-ca-server-org"+(i+1);
+        this.name=name;
+        this.psw=psw;
         this.start();
+        
     }
     
     public void run(){
@@ -20,5 +25,8 @@ public class FabricOrganizationServerThread extends Thread{
                 + "docker compose down");
         Blockchain.executeWSLCommand("cd Prova/"+directory+" &&"
                 + "docker compose up");
+        
+        Blockchain.executeWSLCommand("cd "+Blockchain.mainDirectory+"/fabric-ca-client &&"
+                + "./fabric-ca-client enroll -d -u https://"+name+":"+psw+"@127.0.0.1:7055 --tls.certfiles tls-root-cert/tls-ca-cert.pem --mspdir org1-ca/rcaadmin/msp");
     }
 }

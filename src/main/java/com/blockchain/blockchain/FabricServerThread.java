@@ -11,11 +11,7 @@ package com.blockchain.blockchain;
 public class FabricServerThread extends Thread{
     String directory;
     public FabricServerThread(int i){
-        if(i==0){
-            directory="fabric-ca-server";
-        }else{
-            directory="fabric-ca-server"+i;
-        }
+        directory=Blockchain.fabric_ca_server_name;
         this.start();
     }
     
@@ -24,8 +20,5 @@ public class FabricServerThread extends Thread{
                 + "docker compose up");
     }
     
-    public void kill(){
-        this.kill();
-        
-    }
+    
 }

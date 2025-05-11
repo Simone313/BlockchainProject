@@ -128,8 +128,8 @@ registry:
 
   # Contains identity information which is used when LDAP is disabled
   identities:
-     - name: null
-       pass: null
+     - name: admin
+       pass: adminpwd
        type: client
        affiliation: ""
        attrs:
@@ -319,7 +319,7 @@ csr:
         O: Hyperledger
         OU: Fabric
    hosts:
-     - LAPTOP-N8RGURUP
+     - 9a2a0f5c374a
      - localhost
    ca:
       expiry: 131400h
