@@ -41,7 +41,9 @@ public class Blockchain {
         createDirectory(mainDirectory);
         setupCA(yourPin);
         
-        insertNewIdentities();
+        //metodo per creare il sistema di cartelle delle organizzazioni
+        createDirectoryForOrganizations();
+        //insertNewIdentities();
     }
     
     private static void createDirectory(String name){
@@ -791,7 +793,13 @@ public class Blockchain {
                 peerConfig.put("ports", List.of(peerPort + ":7051"));
                 peerConfig.put("networks", List.of("fabric_network"));
                 services.put(peerName, peerConfig);
-
+                boolean k=true;
+                while(k){
+                    peerPort += 1000;
+                    if(!ports_used.contains(peerPort)){
+                        k=false;
+                    }
+                }
                 peerPort += 1000; // es: 7051, 8051, 9051, ecc.
             }
         }
@@ -819,6 +827,65 @@ public class Blockchain {
         writer.close();
 
         System.out.println("docker-compose.yaml created!");
+    }
+    
+    
+    
+    
+    
+    
+    private static void createDirectoryForOrganizations(){
+        Scanner in= new Scanner(System.in);
+        executeWSLCommand("cd "+mainDirectory+" &&"
+                + "mkdir organizations &&"
+                + "cd organizations &&"
+                + "mkdir fabric-ca ordererOrganizations peerOrganizations");
+        boolean k=true;
+        do{
+            System.out.println("-------- ORGANIZATIONS MENU --------");
+            System.out.println("1) Add orderer organization");
+            System.out.println("2) Add peer organization");
+            System.out.println("3) Exit");
+            int risp= in.nextInt();
+            
+            switch(risp){
+                case 1:{
+                    System.out.print("Orderer Organization Name: ");
+                    String organization_name=in.next();
+                    executeWSLCommand("cd "+mainDirectory+"/organizations/ordererOrganizations &&"
+                            + "mkdir "+organization_name);
+                    break;
+                }
+                case 2:{
+                    System.out.print("Peer Organization Name: ");
+                    String organization_name=in.next();
+                    executeWSLCommand("cd "+mainDirectory+"/organizations/peerOrganizations &&"
+                            + "mkdir "+organization_name+" &&"
+                            + "cd "+organization_name+" &&"
+                            + "mkdir msp peers");
+                    System.out.println("How many peers do you want to create?");
+                    int num_peer=in.nextInt();
+                    for(int i=1;i<=num_peer;i++){
+                        System.out.print("Peer "+i+" Name: ");
+                        String peer_name=in.next();
+                        executeWSLCommand("cd "+mainDirectory+"/organizations/peerOrganizations/"+organization_name+"/peers &&"
+                                + "mkdir "+peer_name+" &&"
+                                + "cd "+peer_name+" &&"
+                                + "mkdir msp tls");
+                    }
+                    break;
+                }
+                case 3:{
+                    k=false;
+                    break;
+                }
+                default:{
+                    System.out.println("ERROR");
+                }
+            }
+        }while(k);
+        
+        
     }
 
         

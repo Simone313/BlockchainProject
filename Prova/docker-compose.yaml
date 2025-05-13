@@ -18,7 +18,7 @@ services:
     image: hyperledger/fabric-ca
     environment:
     - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
-    - FABRIC_CA_SERVER_CA_NAME=org1-ca
+    - FABRIC_CA_SERVER_CA_NAME=org1
     - FABRIC_CA_SERVER_TLS_ENABLED=true
     - FABRIC_CA_SERVER_TLS_CERTFILE=/etc/hyperledger/fabric-ca-server/tls/cert.pem
     - FABRIC_CA_SERVER_TLS_KEYFILE=/etc/hyperledger/fabric-ca-server/tls/ORG1_PRIVATE_KEY
@@ -27,16 +27,3 @@ services:
     command: sh -c 'fabric-ca-server start -b admin:adminpwd -d'
     volumes:
     - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/fabric-ca-server-org1:/etc/hyperledger/fabric-ca-server
-  fabric-ca-server-int-ca:
-    image: hyperledger/fabric-ca
-    environment:
-    - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
-    - FABRIC_CA_SERVER_CA_NAME=int1-ca
-    - FABRIC_CA_SERVER_TLS_ENABLED=true
-    - FABRIC_CA_SERVER_TLS_CERTFILE=/etc/hyperledger/fabric-ca-server/tls/cert.pem
-    - FABRIC_CA_SERVER_TLS_KEYFILE=/etc/hyperledger/fabric-ca-server/tls/CA_PRIVATE_KEY
-    ports:
-    - 7056:7054
-    command: sh -c 'fabric-ca-server start -b admin:adminpwd -d'
-    volumes:
-    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/fabric-ca-server-int-ca:/etc/hyperledger/fabric-ca-server

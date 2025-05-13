@@ -1,5 +1,5 @@
 version: v1.5.15
-port: 7056
+port: 7055
 cors:
   enabled: false
   origins:
@@ -14,7 +14,7 @@ tls:
     type: noclientcert
     certfiles: null
 ca:
-  name: int1-ca
+  name: org1
   keyfile: null
   certfile: null
   chainfile: null
