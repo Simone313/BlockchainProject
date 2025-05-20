@@ -4,6 +4,7 @@
  */
 package com.blockchain.blockchain;
 
+
 /**
  *
  * @author simo0
@@ -17,7 +18,7 @@ public class FabricServerThread extends Thread{
     
     public void run(){
         Blockchain.executeWSLCommand("cd Prova/"+directory+" &&"
-                + "docker compose up");
+                + "docker compose up -d");
     }
     
     

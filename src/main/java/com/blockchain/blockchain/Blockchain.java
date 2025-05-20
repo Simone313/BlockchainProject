@@ -20,6 +20,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 public class Blockchain {
     
     static LinkedList<ServerCA> server_list= new LinkedList<ServerCA>();
@@ -34,6 +36,10 @@ public class Blockchain {
     static String fabric_ca_server_name;
     static LinkedList<Integer> ports_used;
     static int inter_port;
+    static int server_port;
+    static String tls_ca_name;
+    static String org_ca_name;
+    static String int_ca_name;
     public static void main(String[] args) throws IOException {
         //executeWSLCommand("pwd");
         mainDirectory="Prova";
@@ -79,13 +85,9 @@ public class Blockchain {
             //int num_org=in.nextInt();
             setupCA_TLS(0);
             createDockerComposeYaml();
-            
             new FabricServerThread(0);
-            try {
-                    Thread.sleep(5000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+            
+            waitForContainer(tls_ca_name);
 
             enrollRequestToCAServer(0);
             enrollCAAdmin(0);
@@ -97,40 +99,25 @@ public class Blockchain {
             }
             String userName=registerNewIdentity(0);
             deployOrganizationCA(0, userName);
-            new FabricOrganizationServerThread(0, org_name, org_psw);
-            try {
-                    Thread.sleep(5000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+            new FabricOrganizationServerThread(0);
+            waitForContainer(org_ca_name);
+            
+            
+            executeWSLCommand("cd "+Blockchain.mainDirectory+"/fabric-ca-client &&"
+                + "./fabric-ca-client enroll -d -u https://"+org_name+":"+org_psw+"@localhost:7055 --tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-server-org1/tls/cert.pem --csr.hosts '"+server_list.get(0).getCsrHosts().get(0)+","+server_list.get(0).getCsrHosts().get(1)+"' --mspdir $(pwd)/"+mainDirectory+"/fabric-ca-client/org1-ca/rcaadmin/msp");
+
             
             if(intermediate){
                 deployIntermediateCA();
-                new FabricIntermediateServerThread(icaadmin_name, icaadmin_psw);
+                new FabricIntermediateServerThread();
+                waitForContainer(int_ca_name);
+                
+                executeWSLCommand("cd "+Blockchain.mainDirectory+"/fabric-ca-client &&"
+                + "./fabric-ca-client enroll -d -u https://"+icaadmin_name+":"+icaadmin_psw+"@localhost:7056 --tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-server-int-ca/tls/cert.pem --csr.hosts '"+server_list.get(0).getCsrHosts().get(0)+","+server_list.get(0).getCsrHosts().get(1)+"' --mspdir $(pwd)/"+mainDirectory+"/fabric-ca-client/int-ca/icaadmin/msp");
+
             }
             
             
-            /*for(int j=0;j<num_org;j++){
-                setupCA_TLS(j);
-                FabricServerThread serverCA=new FabricServerThread(j);
-                try {
-                    Thread.sleep(5000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-
-                enrollRequestToCAServer(j);
-                registerNewIdentity(j);
-                System.out.println("Do you want to distirbute an Intermediate CA? s/n");
-                if(in.next().equals("s")){
-                    registerIntermediateCAAdmin(j);
-                    deployIntermediateCA();
-                }
-                
-                deployOrganizationCA(j);
-                serverCA.kill();
-                new FabricOrganizationServerThread(j);
-            }*/
             
             
         }
@@ -263,7 +250,7 @@ public class Blockchain {
                 "services:\n" +
                 "  ca_server:\n" +
                 "    image: hyperledger/fabric-ca:1.5\n" +
-                "    container_name: ca_server\n" +
+                "    container_name: "+tls_ca_name+"\n" +
                 "    ports:\n" +
                 "      - \"7054:7054\"\n" +
                 "    environment:\n" +
@@ -273,7 +260,8 @@ public class Blockchain {
                 "      - FABRIC_CA_SERVER_TLS_CERTFILE=/etc/hyperledger/fabric-ca-server-config/tls-ca-cert.pem\n" +
                 "      - FABRIC_CA_SERVER_TLS_KEYFILE=/etc/hyperledger/fabric-ca-server-config/CA_PRIVATE_KEY\n" +
                 "    volumes:\n" +
-                "      - $(pwd)/Prova/"+fabric_ca_server_name+"/msp/keystore:/etc/hyperledger/fabric-ca-server-config\n" +
+                "      - $(pwd)/"+mainDirectory+"/"+fabric_ca_server_name+"/msp/keystore:/etc/hyperledger/fabric-ca-server-config\n"+
+                "      - $(pwd)/"+mainDirectory+"/"+fabric_ca_server_name+"/fabric-ca-server-config.yaml:/etc/hyperledger/fabric-ca-server/fabric-ca-server-config.yaml\n" +
                 "    command: sh -c 'fabric-ca-server start -b"+ admin_name+":"+admin_pwd+" -d'\n"+
                 "EOF");
     }
@@ -302,12 +290,12 @@ public class Blockchain {
             
             //CA
             System.out.print("Name of this CA: ");
-            String CA_name=in.next();
+            tls_ca_name=in.next();
             File server_config=new File(""+ mainDirectory +"/"+fabric_ca_server_name+"/fabric-ca-server-config.yaml");
             Yaml yaml= new Yaml();
             Map<String, Object> data= yaml.load(new FileReader(server_config));
             Map<String,Object> ca=(Map<String,Object>) data.get("ca");
-            ca.put("name", CA_name);
+            ca.put("name", tls_ca_name);
             
             
             //TLS
@@ -318,16 +306,21 @@ public class Blockchain {
             }else{
                 Map<String,Object> tls=(Map<String,Object>) data.get("tls");
                 tls.put("enabled",true);
-                
+                tls.put("certfile", "/etc/hyperledger/fabric-ca-server/tls/cert.pem");
+                tls.put("keyfile", "/etc/hyperledger/fabric-ca-server/tls/CA_PRIVATE_KEY");
+                //Map<String,Object> tls_clientauth=(Map<String,Object>) tls.get("clientauth");
                 
                 
                 System.out.println("Do you want to activate the mutual TLS option? s/n");
                 risp=in.next();
+                Map<String,Object> tls_clientauth= (Map<String,Object>) tls.get("clientauth");
                 if(risp.equals("n")){
                 }else{
-                    Map<String,Object> tls_clientauth= (Map<String,Object>) tls.get("clientauth");
+                    
                     tls_clientauth.put("type", "RequireAndVerifyClientCert");
                 }
+                
+                tls_clientauth.put("certfiles", "$(pwd)/Prova/fabric-ca-server-tls/msp/keystore/tls-ca-cert.pem");
             }
             
             //CAFILES  
@@ -354,7 +347,7 @@ public class Blockchain {
                 intermediate_parentserver.put("caname", caname);
                 
                 Map<String,Object> intermediate_enrollment=(Map<String,Object>) intermediate.get("enrollment");
-                intermediate_enrollment.put("hosts",CA_name);
+                intermediate_enrollment.put("hosts",tls_ca_name);
                 intermediate_enrollment.put("profile", "tls");
                 intermediate_enrollment.put("label", "tls-ca-intermediate");
                 
@@ -363,7 +356,6 @@ public class Blockchain {
             
             //PORT
             ports_used=new LinkedList<Integer>();
-            int server_port = 0;
             boolean k=true;
             while(k){
                 System.out.print("Enter the server port (es. 7054): ");
@@ -440,12 +432,12 @@ public class Blockchain {
             Scanner in = new Scanner(System.in);
             //CA
             System.out.print("Name of this CA: ");
-            String CA_name=in.next();
-            File server_config=new File(""+ mainDirectory +"/"+fabric_ca_server_name+"/fabric-ca-server-config.yaml");
+            org_ca_name=in.next();
+            File server_config=new File(""+ mainDirectory +"/"+server_name+"/fabric-ca-server-config.yaml");
             Yaml yaml= new Yaml();
             Map<String, Object> data= yaml.load(new FileReader(server_config));
             Map<String,Object> ca=(Map<String,Object>) data.get("ca");
-            ca.put("name", CA_name);
+            ca.put("name", org_ca_name);
             
             
             //TLS
@@ -495,7 +487,7 @@ public class Blockchain {
                 intermediate_parentserver.put("caname", caname);
                 
                 Map<String,Object> intermediate_enrollment=(Map<String,Object>) intermediate.get("enrollment");
-                intermediate_enrollment.put("hosts",CA_name);
+                intermediate_enrollment.put("hosts",org_ca_name);
                 intermediate_enrollment.put("profile", "tls");
                 intermediate_enrollment.put("label", "tls-ca-intermediate");
                 
@@ -553,7 +545,7 @@ public class Blockchain {
             }
             System.out.println("Config updated");
             
-            addCAtoDocker(CA_name, tlsEn, server_port, server_name, false);
+            addCAtoDocker(org_ca_name, tlsEn, server_port, server_name, false);
             
     }
     
@@ -568,6 +560,7 @@ public class Blockchain {
         //add organization CA service
         Map<String, Object> caOrg1 = new LinkedHashMap<>();
         caOrg1.put("image", "hyperledger/fabric-ca");
+        caOrg1.put("container_name",name);
         caOrg1.put("environment", Arrays.asList(
             "FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server",
             "FABRIC_CA_SERVER_CA_NAME="+name,
@@ -576,13 +569,24 @@ public class Blockchain {
             "FABRIC_CA_SERVER_TLS_KEYFILE=/etc/hyperledger/fabric-ca-server/tls/"+((inter)? "CA_PRIVATE_KEY":"ORG1_PRIVATE_KEY")
         ));
         
-        caOrg1.put("ports", Collections.singletonList(port+":7054"));
+        caOrg1.put("ports", Collections.singletonList(port+":"+port));
         caOrg1.put("command", "sh -c 'fabric-ca-server start -b "+ admin_name+":"+admin_pwd+" -d'");
+        String path=executeWSLCommandToString("echo $(pwd)");
         if(inter){
-            caOrg1.put("volumes", Collections.singletonList("/mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/"+mainDirectory+"/fabric-ca-server-int-ca:/etc/hyperledger/fabric-ca-server"));
+            
+            caOrg1.put("volumes", Arrays.asList(
+                path + "/" + mainDirectory + "/fabric-ca-server-int-ca:/etc/hyperledger/fabric-ca-server",
+                path + "/" + mainDirectory + "/fabric-ca-server-int-ca/fabric-ca-server-config.yaml:/etc/hyperledger/fabric-ca-server/fabric-ca-server-config.yaml"
+            ));
+
         
         }else{
-            caOrg1.put("volumes", Collections.singletonList("/mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/"+mainDirectory+"/fabric-ca-server-org1:/etc/hyperledger/fabric-ca-server"));
+            caOrg1.put("volumes", Arrays.asList(
+                path+"/"+mainDirectory+"/fabric-ca-server-org1:/etc/hyperledger/fabric-ca-server",
+                path+"/"+mainDirectory+"/fabric-ca-server-org1/fabric-ca-server-config.yaml:/etc/hyperledger/fabric-ca-server/fabric-ca-server-config.yaml"
+            ));
+
+            
         }
         services.put(serverName, caOrg1);
         
@@ -599,49 +603,9 @@ public class Blockchain {
     private static void deployIntermediateCA() throws IOException{
         
         
-                        executeWSLCommand("cd "+mainDirectory+"/fabric-ca-int-ca &&"
-                                + "./fabric-ca-server init "+icaadmin_name+":"+icaadmin_psw);
-                //+ "cp fabric-ca-client/tls-ca/"+icaadmin_name+"/msp/* fabric-ca-client/tls-ca/rcaadmin/msp/ ");
-               //+ "cp "+mainDirectory+"/fabric-ca-client/tls-ca/"+icaadmin_name+"/msp/signcerts/cert.pem tls && cp "+mainDirectory+"/fabric-ca-client/tls-ca/icaadmin/msp/keystore/key.pem tls");
-        
-        /*executeWSLCommand("cd "+mainDirectory+"/"+server_name+" &&"
-                + "export FABRIC_CA_SERVER_TLS_ENABLED=true &&"
-                + "export FABRIC_CA_SERVER_TLS_CERTFILE=tls/cert.pem &&"
-                + "export FABRIC_CA_SERVER_TLS_KEYFILE=tls/key.pem &&"
-                + "./fabric-ca-server init -b "+icaadmin_name+":"+icaadmin_psw);*/
-        /*String command = String.join(" && ",
-            "cd " + mainDirectory + "/" + server_name,
-            "mkdir -p tls",
-            "sh -c 'cat > tls/openssl-san.cnf <<EOF\n" +
-                "[ req ]\n" +
-                "default_bits       = 2048\n" +
-                "prompt             = no\n" +
-                "default_md         = sha256\n" +
-                "req_extensions     = req_ext\n" +
-                "distinguished_name = dn\n" +
-                "\n" +
-                "[ dn ]\n" +
-                "CN = intermediate-ca\n" +
-                "\n" +
-                "[ req_ext ]\n" +
-                "subjectAltName = @alt_names\n" +
-                "\n" +
-                "[ alt_names ]\n" +
-                "IP.1 = 127.0.0.1\n" +
-                "DNS.1 = localhost\n" +
-                "EOF'",
-            "openssl ecparam -genkey -name prime256v1 -out tls/key.pem",
-            "openssl req -new -key tls/key.pem -out tls/csr.pem -config tls/openssl-san.cnf -extensions req_ext",
-            "openssl x509 -req -in tls/csr.pem -CA $(pwd)/"+mainDirectory+"/fabric-ca-server/msp/keystore/tls-ca-cert.pem -CAkey $(pwd)/"+mainDirectory+"/fabric-ca-server/msp/keystore/CA_PRIVATE_KEY -CAcreateserial -out tls/cert.pem -days 365 -extensions req_ext -extfile tls/openssl-san.cnf",
-            "export FABRIC_CA_SERVER_TLS_ENABLED=true",
-            "export FABRIC_CA_SERVER_TLS_CERTFILE=tls/cert.pem",
-            "export FABRIC_CA_SERVER_TLS_KEYFILE=tls/key.pem",
-            "./fabric-ca-server init -b " + icaadmin_name + ":" + icaadmin_psw
-        );*/
-        
-        
-        
-        //executeWSLCommand(command);
+        executeWSLCommand("cd "+mainDirectory+"/fabric-ca-server-int-ca &&"
+                + "./fabric-ca-server init -b"+icaadmin_name+":"+icaadmin_psw);
+               
 
         String old_name=executeWSLCommandToString("find $(pwd)/Prova/fabric-ca-server-int-ca/msp -name '*_sk'");
         System.out.println("old_name:"+old_name);
@@ -650,12 +614,12 @@ public class Blockchain {
         Scanner in = new Scanner(System.in);
             //CA
             System.out.print("Name of this CA: ");
-            String CA_name=in.next();
-            File server_config=new File(""+ mainDirectory +"/"+fabric_ca_server_name+"/fabric-ca-server-config.yaml");
+            int_ca_name=in.next();
+            File server_config=new File(""+ mainDirectory +"/fabric-ca-server-int-ca/fabric-ca-server-config.yaml");
             Yaml yaml= new Yaml();
             Map<String, Object> data= yaml.load(new FileReader(server_config));
             Map<String,Object> ca=(Map<String,Object>) data.get("ca");
-            ca.put("name", CA_name);
+            ca.put("name", int_ca_name);
             
             
             //TLS
@@ -679,6 +643,8 @@ public class Blockchain {
                     Map<String,Object> tls_clientauth= (Map<String,Object>) tls.get("clientauth");
                     tls_clientauth.put("type", "RequireAndVerifyClientCert");
                 }
+                
+                
             }
             
             //CAFILES  
@@ -705,7 +671,7 @@ public class Blockchain {
                 intermediate_parentserver.put("caname", caname);
                 
                 Map<String,Object> intermediate_enrollment=(Map<String,Object>) intermediate.get("enrollment");
-                intermediate_enrollment.put("hosts",CA_name);
+                intermediate_enrollment.put("hosts",int_ca_name);
                 intermediate_enrollment.put("profile", "tls");
                 intermediate_enrollment.put("label", "tls-ca-intermediate");
                 
@@ -762,7 +728,7 @@ public class Blockchain {
             }
             System.out.println("Config updated");
             String server_name= "fabric-ca-server-int-ca";
-            addCAtoDocker(CA_name, tlsEn, inter_port, server_name, true);
+            addCAtoDocker(int_ca_name, tlsEn, inter_port, server_name, true);
     }
     
     
@@ -853,7 +819,20 @@ public class Blockchain {
                     System.out.print("Orderer Organization Name: ");
                     String organization_name=in.next();
                     executeWSLCommand("cd "+mainDirectory+"/organizations/ordererOrganizations &&"
-                            + "mkdir "+organization_name);
+                            + "mkdir "+organization_name+" &&"
+                            + "cd "+organization_name+" &&"
+                            + "mkdir msp orderers");
+                    System.out.println("How many orderers do you want to create?");
+                    int num_orderer=in.nextInt();
+                    for(int i=1;i<=num_orderer;i++){
+                        System.out.print("Orderer "+i+" Name: ");
+                        String orderer_name=in.next();
+                        executeWSLCommand("cd "+mainDirectory+"/organizations/ordererOrganizations/"+organization_name+"/orderers &&"
+                                + "mkdir "+orderer_name+" &&"
+                                + "cd "+orderer_name+" &&"
+                                + "mkdir msp tls");
+                    }
+                    organizationAdminRegistrationEnroll(organization_name, false);
                     break;
                 }
                 case 2:{
@@ -863,6 +842,7 @@ public class Blockchain {
                             + "mkdir "+organization_name+" &&"
                             + "cd "+organization_name+" &&"
                             + "mkdir msp peers");
+                    
                     System.out.println("How many peers do you want to create?");
                     int num_peer=in.nextInt();
                     for(int i=1;i<=num_peer;i++){
@@ -873,6 +853,7 @@ public class Blockchain {
                                 + "cd "+peer_name+" &&"
                                 + "mkdir msp tls");
                     }
+                    organizationAdminRegistrationEnroll(organization_name, true);
                     break;
                 }
                 case 3:{
@@ -887,6 +868,32 @@ public class Blockchain {
         
         
     }
+    
+    
+    private static void createConfig_yamlForPeer(){
+        
+    }
+    
+    private static void organizationAdminRegistrationEnroll(String org_name, boolean peer_org){
+        System.out.println("---------- ORGANIZATION ADMIN REGISTRATION ----------");
+        Scanner in= new Scanner(System.in);
+        System.out.print("Name: ");
+        String name=in.next();
+        System.out.print("Password: ");
+        String psw= in.next();
+        
+        String org_directory= peer_org? "peerOrganizations":"ordererOrganizations";
+        
+        executeWSLCommand("cd "+ mainDirectory +"/fabric-ca-client &&"
+                    + "export FABRIC_CA_CLIENT_HOME=$(pwd)/tls-ca/rcaadmin &&"
+                    + "./fabric-ca-client register -d --id.name "+name+" --id.secret "+psw+" -u https://localhost:7055 --tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-server-org1/tls/cert.pem --mspdir $(pwd)/"+mainDirectory+"/fabric-ca-client/org1-ca/rcaadmin/msp --id.type admin");       
+
+        executeWSLCommand("cd "+mainDirectory+"/fabric-ca-client &&"
+                + "./fabric-ca-client enroll -u https://"+name+":"+psw+"@localhost:7055 --mspdir $(pwd)/"+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp --csr.hosts 'host1' --tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-server-org1/tls/cert.pem");
+    }
+    
+    
+    
 
         
 
@@ -924,7 +931,7 @@ public class Blockchain {
     }
     
     
-    private static String executeWSLCommandToString(String bashCommand){
+    public static String executeWSLCommandToString(String bashCommand){
         String ris="";
         try {
             // Esegui comando in WSL
@@ -951,4 +958,25 @@ public class Blockchain {
         }
         return ris;
     }
+    
+    /**
+     * It is used to ensure that the program waits for the specified container to start.
+     * @param containerName Name of the container whose startup must be awaited.
+     */
+    private static void waitForContainer(String containerName){
+        boolean ready= false;
+        while(!ready){
+          String output= executeWSLCommandToString("cd "+mainDirectory+" && docker ps"); 
+           if(output !=null && output.contains(containerName)){
+               ready=true;
+           }else{
+              try {
+                  Thread.sleep(2000);
+              } catch (InterruptedException ex) {
+                  Logger.getLogger(FabricOrganizationServerThread.class.getName()).log(Level.SEVERE, null, ex);
+              }
+           }
+        }
+    }
+    
 }
