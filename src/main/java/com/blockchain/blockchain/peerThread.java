@@ -9,8 +9,9 @@ package com.blockchain.blockchain;
  * @author simo0
  */
 public class peerThread extends Thread {
-    
-    public peerThread(){
+    String name;
+    public peerThread(String name){
+        this.name=name;
         this.start();
     }
     
@@ -19,5 +20,7 @@ public class peerThread extends Thread {
                 + "docker compose down");
         Blockchain.executeWSLCommand("cd Prova &&"
                 + "docker compose up -d");
+        
+         
     }
 }

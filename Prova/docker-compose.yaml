@@ -1,0 +1,66 @@
+version: '3'
+services:
+  ca_server:
+    image: hyperledger/fabric-ca:1.5
+    container_name: tls-1
+    ports:
+    - 7054:7054
+    environment:
+    - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
+    - FABRIC_CA_SERVER_CA_NAME=ca-server
+    - FABRIC_CA_SERVER_TLS_ENABLED=true
+    - FABRIC_CA_SERVER_TLS_CERTFILE=/etc/hyperledger/fabric-ca-server-config/tls-ca-cert.pem
+    - FABRIC_CA_SERVER_TLS_KEYFILE=/etc/hyperledger/fabric-ca-server-config/CA_PRIVATE_KEY
+    volumes:
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/fabric-ca-server-tls/msp/keystore:/etc/hyperledger/fabric-ca-server-config
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/fabric-ca-server-tls/fabric-ca-server-config.yaml:/etc/hyperledger/fabric-ca-server/fabric-ca-server-config.yaml
+    command: sh -c 'fabric-ca-server start -badmin:adminPsw -d'
+  fabric-ca-server-org1:
+    image: hyperledger/fabric-ca
+    container_name: org1-ca
+    environment:
+    - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
+    - FABRIC_CA_SERVER_CA_NAME=org1-ca
+    - FABRIC_CA_SERVER_TLS_ENABLED=true
+    - FABRIC_CA_SERVER_TLS_CERTFILE=/etc/hyperledger/fabric-ca-server/tls/cert.pem
+    - FABRIC_CA_SERVER_TLS_KEYFILE=/etc/hyperledger/fabric-ca-server/tls/ORG1_PRIVATE_KEY
+    ports:
+    - 7055:7055
+    command: sh -c 'fabric-ca-server start -b admin:adminPsw -d'
+    volumes:
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/fabric-ca-server-org1:/etc/hyperledger/fabric-ca-server
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/fabric-ca-server-org1/fabric-ca-server-config.yaml:/etc/hyperledger/fabric-ca-server/fabric-ca-server-config.yaml
+  couchdb:
+    image: couchdb:3.3.2
+    environment:
+    - COUCHDB_USER=admin
+    - COUCHDB_PASSWORD=adminPsw
+    container_name: couchdb
+    volumes:
+    - couchdb-data:/opt/couchdb/data
+    ports:
+    - 5984:5984
+    networks:
+    - fabric-network
+  p1.peerOrg1:
+    container_name: p1.peerOrg1
+    image: hyperledger/fabric-peer
+    environment:
+    - FABRIC_CFG_PATH=/etc/hyperledger/fabric/config
+    - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/msp
+    volumes:
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/peers_bin/p1.peerOrg1/config:/etc/hyperledger/fabric/config
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/peerOrganizations/peerOrg1/peers/p1.peerOrg1/msp:/etc/hyperledger/fabric/msp
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/peerOrganizations/peerOrg1/peers/p1.peerOrg1/tls:/etc/hyperledger/fabric/tls
+    ports:
+    - 7051
+    networks: fabric-network
+    command: peer node start
+    depends_on: couchdb
+networks:
+  fabric-network:
+    driver: bridge
+    name: fabric-network
+volumes:
+  couchdb-data: {
+    }

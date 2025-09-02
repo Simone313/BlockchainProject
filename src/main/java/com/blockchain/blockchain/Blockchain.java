@@ -41,8 +41,8 @@ public class Blockchain {
     static String tls_ca_name;
     static String org_ca_name;
     static String int_ca_name;
+    
     public static void main(String[] args) throws IOException {
-        //executeWSLCommand("pwd");
         mainDirectory="Prova";
         String yourPin="2003";
         createDirectory(mainDirectory);
@@ -50,7 +50,6 @@ public class Blockchain {
         
         //metodo per creare il sistema di cartelle delle organizzazioni
         createDirectoryForOrganizations();
-        //insertNewIdentities();
         
     }
     
@@ -916,18 +915,24 @@ public class Blockchain {
     
     public static void configure_peer_core(String peer_name, String org_name) throws FileNotFoundException, IOException{
         Scanner in= new Scanner(System.in);
-        System.out.println("------------ PEER "+peer_name+"."+org_name+" CONFIGURATION ------------");
+        System.out.println("------------ PEER "+peer_name+" CONFIGURATION ------------");
         File peer_config=new File(""+ mainDirectory +"/peers_bin/"+peer_name+"/config/core.yaml");
         Yaml yaml= new Yaml();
         Map<String, Object> data= yaml.load(new FileReader(peer_config));
         Map<String, Object> peer= (Map<String, Object>) data.get("peer");
+        
+        //Cancelliamo l'handler TimeWindowCheck (non supportato)
+        Map<String, Object> handlers = (Map<String, Object>) peer.get("handlers");
+        List<Map<String, String>> authFilters = (List<Map<String, String>>) handlers.get("authFilters");
+        authFilters.removeIf(filter -> "TimeWindowCheck".equals(filter.get("name")));
+
         //ID
         peer.put("id", peer_name);
         
         //NETWORK ID
         System.out.print("networkId (es. dev, test, production ...): ");
         String risp= in.next();
-        peer.put("networkId", risp);
+        peer.put("networkId", "dev");
         
         //LISTEN ADDRESS   
         System.out.print("Listen address (es. 0.0.0.0)");
@@ -1155,6 +1160,9 @@ public class Blockchain {
         // Select state database type
         System.out.print("Choose state database (goleveldb or CouchDB): ");
         String stateDb = in.next().trim();
+        
+        
+        //Se si sceglie goleveldb non è necessario avviare un container in quanto è un DB integrato
         ledger_state.put("stateDatabase", stateDb);
 
         // If CouchDB is selected, collect additional config
@@ -1162,20 +1170,22 @@ public class Blockchain {
             Map<String, Object> couchDBConfig = new LinkedHashMap<>();
             in.nextLine(); // Consume newline
 
-            System.out.print("Enter CouchDB address (e.g., 127.0.0.1:5984): ");
-            String couchAddress = in.nextLine().trim();
+            
+            String couchAddress = "couchdb:5984";
             couchDBConfig.put("couchDBAddress", couchAddress);
 
-            System.out.print("Enter CouchDB username: ");
-            String couchUser = in.nextLine().trim();
+            
+            String couchUser = "admin";
             couchDBConfig.put("username", couchUser);
 
-            System.out.print("Enter CouchDB password: ");
-            String couchPass = in.nextLine().trim();
+            
+            String couchPass = "adminPsw";
             couchDBConfig.put("password", couchPass);
 
             ledger_state.put("couchDBConfig", couchDBConfig);
         }
+        
+        
 
 
         // Snapshot configuration
@@ -1290,11 +1300,24 @@ public class Blockchain {
         String tlsPath=path+"/"+mainDirectory+"/organizations/peerOrganizations/"+org_name+"/peers/"+peer_name+"/tls";
         LinkedList<Integer> ports= new LinkedList<Integer>();
         ports.add(port);
+        boolean cDB=false;
+        //Aggiungiamo il container per CouchDB se necessario
+        if(stateDb.equals("CouchDB")){
+            //Controlliamo se CouchDB è già in esecuzione
+            if(CouchDB.exists()){
+                System.out.println("CouchDB is running");
+            }else{
+                System.out.println("Starting CouchDB...");
+                new CouchDB();
+                waitForContainer("couchdb");
+                cDB=true;
+            }
+        }
         //Aggiunta del peer al file docker-compose.yaml
-        add_peer_to_docker(peer_name,cfgPath,mspPath,tlsPath,ports);
+        add_peer_to_docker(peer_name,cfgPath,mspPath,tlsPath,ports, cDB);
         
         System.out.println("Starting the peer...");
-        new peerThread();
+        new peerThread(peer_name);
         
         waitForContainer(peer_name);
         
@@ -1452,16 +1475,16 @@ public class Blockchain {
             int op_server_port=in.nextInt();
             operations.put("ListenAddress", op_server_add+":"+op_server_port);
             
-            operations.put("Certificate","$(pwd)/"+mainDirectory+"/organizations/ordererOrganizations/"+org_name+"/orderers/"+orderer_name+"/msp/keystore/"); //TODO Scrivere nome del certificato
-            operations.put("PrivateKey","$(pwd)/"+mainDirectory+"/organizations/ordererOrganizations/"+org_name+"/orderers/"+orderer_name+"/msp/keystore/server.key");
+            operations.put("Certificate","/etc/hyperledger/fabric/tls/cert.pem"); 
+            operations.put("PrivateKey","/etc/hyperledger/fabric/tls/key");
             
             System.out.println("Enable mutal TLS between client and server?(y/n)");
             if (in.next().equals("y")) {
                 operations.put("ClientAuthRequired", true);
                 List<String> clientRootCAs = new ArrayList<>();
                 
-                //??
-                clientRootCAs.add("$(pwd)/" + mainDirectory + "/organizations/ordererOrganizations/" + org_name + "/orderers/" + orderer_name + "/tls/ca.crt");
+                
+                clientRootCAs.add("/etc/hyperledger/fabric/tls/tls-ca-cert.pem");
 
                 operations.put("ClientRootCAs", clientRootCAs);
             }
@@ -1602,17 +1625,17 @@ public class Blockchain {
 
         executeWSLCommand("cd "+mainDirectory+"/fabric-ca-client &&"
                 + "./fabric-ca-client enroll -u https://"+node_name+":"+node_name+"_PSW@localhost:7055 --mspdir $(pwd)/"+mainDirectory+"/organizations/"+org_directory+"msp --csr.hosts 'host1' --tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-server-org1/tls/cert.pem");
-        executeWSLCommand("mkdir "+mainDirectory+"/organizations/peerOrganization/"+org_name+"/peers/"+node_name+"msp/admincerts &&"
-                + "cp "+mainDirectory+"/organizations/peerOrganization/"+org_name+"/msp/signcerts/*.pem /"+mainDirectory+"/organizations/"+org_directory+"msp/admincerts/");
+        executeWSLCommand("mkdir "+mainDirectory+"/organizations/"+org_directory+"msp/admincerts &&"
+                + "cp "+mainDirectory+"/organizations/"+(peer_org? "peerOrganizations/":"ordererOrganizations/")+org_name+"/msp/signcerts/cert.pem "+mainDirectory+"/organizations/"+org_directory+"msp/admincerts");
         
         //copio il certificato in tls
-        executeWSLCommand("cp $(pwd)/"+mainDirectory+"/organizations/"+org_directory+"msp/signcerts/cert.pem $(pwd)/"+mainDirectory+"/"+org_directory+"tls");
+        executeWSLCommand("cp $(pwd)/"+mainDirectory+"/organizations/"+org_directory+"msp/signcerts/cert.pem $(pwd)/"+mainDirectory+"/organizations/"+org_directory+"tls");
         //rinomino la chiave e ls sposto in tls
         String old_name=executeWSLCommandToString("find $(pwd)/"+mainDirectory+"/organizations/"+org_directory+"msp/keystore -name '*_sk'");
         executeWSLCommand("mv "+old_name+" $(pwd)/"+mainDirectory+"/organizations/"+org_directory+"msp/keystore/key");
-        executeWSLCommand("cp $(pwd)/"+mainDirectory+"/organizations/"+org_directory+"msp/keystore/key $(pwd)/"+mainDirectory+"/"+org_directory+"tls");
+        executeWSLCommand("cp $(pwd)/"+mainDirectory+"/organizations/"+org_directory+"msp/keystore/key $(pwd)/"+mainDirectory+"/organizations/"+org_directory+"tls");
         //copia del tls-root-cert
-        executeWSLCommand("cp $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-root-cert.pem $(pwd)/"+mainDirectory+"/"+org_directory+"tls");
+        executeWSLCommand("cp $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem $(pwd)/"+mainDirectory+"/organizations/"+org_directory+"tls");
     }
     
     /**
@@ -1623,7 +1646,7 @@ public class Blockchain {
      * @param ports porte utilizzate dal peer
      * @throws IOException 
      */
-    private static void add_peer_to_docker(String peerName, String cfgPath, String mspPath, String tlsPath, LinkedList<Integer> ports) throws IOException{
+    private static void add_peer_to_docker(String peerName, String cfgPath, String mspPath, String tlsPath, LinkedList<Integer> ports, boolean couchDB) throws IOException{
         Yaml yaml = new Yaml();
         File file = new File(mainDirectory + "/docker-compose.yaml");
 
@@ -1654,14 +1677,19 @@ public class Blockchain {
         List<String> volumes = new ArrayList<>();
         volumes.add(cfgPath + ":/etc/hyperledger/fabric/config");
         volumes.add(mspPath + ":/etc/hyperledger/fabric/msp");
-        volumes.add(tlsPath + ":/etc(hyperledger/fabric/tls");
+        volumes.add(tlsPath + ":/etc/hyperledger/fabric/tls");
         peerConfig.put("volumes", volumes);
         
          // Ports
         peerConfig.put("ports", ports);
-
+        // Network
+        peerConfig.put("networks", Arrays.asList("fabric-network"));
         // Command
         peerConfig.put("command", "peer node start");
+        if(couchDB){
+            // Dipendenze, cioè i container che deve aspettare prima di avviarsi
+            peerConfig.put("depends_on", "couchdb");
+        }
         
         services.put(peerName, peerConfig);
         DumperOptions options = new DumperOptions();
@@ -1704,7 +1732,7 @@ public class Blockchain {
         List<String> volumes = new ArrayList<>();
         volumes.add(cfgPath + ":/etc/hyperledger/fabric/config");
         volumes.add(mspPath + ":/etc/hyperledger/fabric/msp");
-        volumes.add(tlsPath + ":/etc(hyperledger/fabric/tls");
+        volumes.add(tlsPath + ":/etc/hyperledger/fabric/tls");
         ordererConfig.put("volumes", volumes);
 
         ordererConfig.put("ports", ports);
