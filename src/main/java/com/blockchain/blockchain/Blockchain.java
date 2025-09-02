@@ -41,6 +41,7 @@ public class Blockchain {
     static String tls_ca_name;
     static String org_ca_name;
     static String int_ca_name;
+    static String first_peer;
     
     public static void main(String[] args) throws IOException {
         mainDirectory="Prova";
@@ -300,40 +301,29 @@ public class Blockchain {
             
             
             //TLS
-            System.out.println("Do you want to enable TLS? s/n");
+            Map<String,Object> tls=(Map<String,Object>) data.get("tls");
+            tls.put("enabled",true);
+            tls.put("certfile", "/etc/hyperledger/fabric-ca-server/tls/cert.pem");
+            tls.put("keyfile", "/etc/hyperledger/fabric-ca-server/tls/CA_PRIVATE_KEY");
+            //Map<String,Object> tls_clientauth=(Map<String,Object>) tls.get("clientauth");
+
+
+            System.out.println("Do you want to activate the mutual TLS option? s/n");
             String risp=in.next();
+            Map<String,Object> tls_clientauth= (Map<String,Object>) tls.get("clientauth");
             if(risp.equals("n")){
-                
             }else{
-                Map<String,Object> tls=(Map<String,Object>) data.get("tls");
-                tls.put("enabled",true);
-                tls.put("certfile", "/etc/hyperledger/fabric-ca-server/tls/cert.pem");
-                tls.put("keyfile", "/etc/hyperledger/fabric-ca-server/tls/CA_PRIVATE_KEY");
-                //Map<String,Object> tls_clientauth=(Map<String,Object>) tls.get("clientauth");
-                
-                
-                System.out.println("Do you want to activate the mutual TLS option? s/n");
-                risp=in.next();
-                Map<String,Object> tls_clientauth= (Map<String,Object>) tls.get("clientauth");
-                if(risp.equals("n")){
-                }else{
-                    
-                    tls_clientauth.put("type", "RequireAndVerifyClientCert");
-                }
-                
-                tls_clientauth.put("certfiles", "$(pwd)/Prova/fabric-ca-server-tls/msp/keystore/tls-ca-cert.pem");
+
+                tls_clientauth.put("type", "RequireAndVerifyClientCert");
             }
+
+            tls_clientauth.put("certfiles", "$(pwd)/Prova/fabric-ca-server-tls/msp/keystore/tls-ca-cert.pem");
             
-            //CAFILES  
-            System.out.println("Do you want to configure a dual-headed CA? s/n");
-            risp=in.next();
-            if(risp.equals("n")){
-            }else{
-                //  TODO creare un organization ca ed inserire il percorso che porta al suo fabric-caserver-config.yaml
-            }
+            
+            
             
             //INTERMEDIATE CA
-            System.out.println("Is this an intermediate CA? s/n");
+            /*System.out.println("Is this an intermediate CA? s/n");
             risp=in.next();
             if(risp.equals("n")){
             }else{
@@ -353,26 +343,19 @@ public class Blockchain {
                 intermediate_enrollment.put("label", "tls-ca-intermediate");
                 
                 //TODO una volta generati i certificati del TLS riportarli nella sezione intermediate
-            }
+            }*/
             
             //PORT
             ports_used=new LinkedList<Integer>();
-            boolean k=true;
-            while(k){
-                System.out.print("Enter the server port (es. 7054): ");
-                server_port=in.nextInt();
-                if(!ports_used.contains(server_port)){
-                    k=false;
-                }else{
-                    System.out.println("Port already in use, try another one.");
-                }
-            }
             
-            ports_used.add(server_port);
-            data.put("port", server_port);
+            
+            ports_used.add(7054);
+            data.put("port", 7054);
             
             //DB
-            System.out.println("Which type of database do you want to use?");
+            Map<String,Object> db=(Map<String,Object>) data.get("db");
+            db.put("type", "sqlite3");
+            /*System.out.println("Which type of database do you want to use?");
             System.out.println("1- SQLite Version 3");
             System.out.println("2- PostgresSQL");
             System.out.println("3- MySQL");
@@ -388,7 +371,7 @@ public class Blockchain {
                 case 3 -> {
                     db.put("type", "mysql");
                 }
-            }
+            }*/
             Map<String, Object> csr = (Map<String, Object>) data.get("csr");
 
             ArrayList<String> hosts = (ArrayList<String>) csr.get("hosts");
@@ -430,123 +413,84 @@ public class Blockchain {
         executeWSLCommand("cp $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-ca/rcaadmin/msp/signcerts/cert.pem $(pwd)/"+mainDirectory+"/fabric-ca-server-org1/tls && cp $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-ca/rcaadmin/msp/keystore/ORG1_PRIVATE_KEY $(pwd)/"+mainDirectory+"/fabric-ca-server-org1/tls ");
         System.out.println("------Modify the ORGANIZATION CA Server configuration------");
             
-            Scanner in = new Scanner(System.in);
-            //CA
-            System.out.print("Name of this CA: ");
-            org_ca_name=in.next();
-            File server_config=new File(""+ mainDirectory +"/"+server_name+"/fabric-ca-server-config.yaml");
-            Yaml yaml= new Yaml();
-            Map<String, Object> data= yaml.load(new FileReader(server_config));
-            Map<String,Object> ca=(Map<String,Object>) data.get("ca");
-            ca.put("name", org_ca_name);
-            
-            
-            //TLS
-            System.out.println("Do you want to enable TLS? s/n");
-            String risp=in.next();
-            boolean tlsEn=false;
-            if(risp.equals("n")){
-                
-            }else{
-                tlsEn=true;
-                Map<String,Object> tls=(Map<String,Object>) data.get("tls");
-                tls.put("enabled",true);
-                
-                tls.put("certfile", "fabric-ca-client/tls-ca/rcaadmin/msp/signcerts/cert.pem");
-                tls.put("keyfile", "fabric-ca-client/tls-ca/rcaadmin/msp/keystore");
-                
-                System.out.println("Do you want to activate the mutual TLS option? s/n");
-                risp=in.next();
-                if(risp.equals("n")){
-                }else{
-                    Map<String,Object> tls_clientauth= (Map<String,Object>) tls.get("clientauth");
-                    tls_clientauth.put("type", "RequireAndVerifyClientCert");
-                }
-            }
-            
-            //CAFILES  
-            System.out.println("Do you want to configure a dual-headed CA? s/n");
-            risp=in.next();
-            if(risp.equals("n")){
-            }else{
-                //  TODO creare un organization ca ed inserire il percorso che porta al suo fabric-caserver-config.yaml
-            }
-            
-            //INTERMEDIATE CA
-            System.out.println("Is this an intermediate CA? s/n");
-            risp=in.next();
-            if(risp.equals("n")){
-            }else{
-                intermediate=true;
-                Map<String,Object> intermediate=(Map<String,Object>) data.get("intermediate");
-                Map<String,Object> intermediate_parentserver=(Map<String,Object>) intermediate.get("parentserver");
-                System.out.print("Parentserver url: ");
-                String url=in.next();
-                System.out.print("Parentserver caname: ");
-                String caname=in.next();
-                intermediate_parentserver.put("url", url);
-                intermediate_parentserver.put("caname", caname);
-                
-                Map<String,Object> intermediate_enrollment=(Map<String,Object>) intermediate.get("enrollment");
-                intermediate_enrollment.put("hosts",org_ca_name);
-                intermediate_enrollment.put("profile", "tls");
-                intermediate_enrollment.put("label", "tls-ca-intermediate");
-                
-                //TODO una volta generati i certificati del TLS riportarli nella sezione intermediate
-            }
-            
-            //PORT
-            int server_port = 0;
-            boolean k=true;
-            while(k){
-                System.out.print("Enter the server port (es. 7055): ");
-                server_port=in.nextInt();
-                if(!ports_used.contains(server_port)){
-                    k=false;
-                }else{
-                    System.out.println("Port already in use, try another one.");
-                }
-            }
-            
-            ports_used.add(server_port);
-            data.put("port", server_port);
-            
-            //DB
-            System.out.println("Which type of database do you want to use?");
-            System.out.println("1- SQLite Version 3");
-            System.out.println("2- PostgresSQL");
-            System.out.println("3- MySQL");
-            int risDB=in.nextInt();
-            Map<String,Object> db=(Map<String,Object>) data.get("db");
-            switch(risDB){
-                case 1 -> {
-                    db.put("type", "sqlite3");
-                }
-                case 2 -> {
-                    db.put("type", "postgres");
-                }
-                case 3 -> {
-                    db.put("type", "mysql");
-                }
-            }
-            Map<String, Object> csr = (Map<String, Object>) data.get("csr");
+        Scanner in = new Scanner(System.in);
+        //CA
+        System.out.print("Name of this CA: ");
+        org_ca_name=in.next();
+        File server_config=new File(""+ mainDirectory +"/"+server_name+"/fabric-ca-server-config.yaml");
+        Yaml yaml= new Yaml();
+        Map<String, Object> data= yaml.load(new FileReader(server_config));
+        Map<String,Object> ca=(Map<String,Object>) data.get("ca");
+        ca.put("name", org_ca_name);
 
-            ArrayList<String> hosts = (ArrayList<String>) csr.get("hosts");
-            server_list.add(new ServerCA(admin_name, admin_pwd, server_port, hosts));
-            
-            //Writing
-            DumperOptions options = new DumperOptions();
-            options.setIndent(2);
-            options.setPrettyFlow(true);
-            options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
-            Yaml yamlWriter = new Yaml(options);
 
-            try (FileWriter writer = new FileWriter(server_config)) {
-                yamlWriter.dump(data, writer);
+        //TLS
+        System.out.println("Do you want to enable TLS? s/n");
+        String risp=in.next();
+        boolean tlsEn=true;
+        Map<String,Object> tls=(Map<String,Object>) data.get("tls");
+        tls.put("enabled",true);
+
+        tls.put("certfile", "fabric-ca-client/tls-ca/rcaadmin/msp/signcerts/cert.pem");
+        tls.put("keyfile", "fabric-ca-client/tls-ca/rcaadmin/msp/keystore");
+
+        System.out.println("Do you want to activate the mutual TLS option? s/n");
+        risp=in.next();
+        if(risp.equals("n")){
+        }else{
+            Map<String,Object> tls_clientauth= (Map<String,Object>) tls.get("clientauth");
+            tls_clientauth.put("type", "RequireAndVerifyClientCert");
+        }
+        
+
+        
+
+        
+
+        //PORT
+        
+
+        ports_used.add(7055);
+        data.put("port", 7055);
+
+        //DB
+        Map<String,Object> db=(Map<String,Object>) data.get("db");
+        db.put("type", "sqlite3");
+        /*System.out.println("Which type of database do you want to use?");
+        System.out.println("1- SQLite Version 3");
+        System.out.println("2- PostgresSQL");
+        System.out.println("3- MySQL");
+        int risDB=in.nextInt();
+        Map<String,Object> db=(Map<String,Object>) data.get("db");
+        switch(risDB){
+            case 1 -> {
+                db.put("type", "sqlite3");
             }
-            System.out.println("Config updated");
-            
-            addCAtoDocker(org_ca_name, tlsEn, server_port, server_name, false);
+            case 2 -> {
+                db.put("type", "postgres");
+            }
+            case 3 -> {
+                db.put("type", "mysql");
+            }
+        }*/
+        Map<String, Object> csr = (Map<String, Object>) data.get("csr");
+
+        ArrayList<String> hosts = (ArrayList<String>) csr.get("hosts");
+        server_list.add(new ServerCA(admin_name, admin_pwd, server_port, hosts));
+
+        //Writing
+        DumperOptions options = new DumperOptions();
+        options.setIndent(2);
+        options.setPrettyFlow(true);
+        options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+        Yaml yamlWriter = new Yaml(options);
+
+        try (FileWriter writer = new FileWriter(server_config)) {
+            yamlWriter.dump(data, writer);
+        }
+        System.out.println("Config updated");
+
+        addCAtoDocker(org_ca_name, tlsEn, server_port, server_name, false);
             
     }
     
@@ -845,10 +789,12 @@ public class Blockchain {
                     for(int i=0;i<num_orderer;i++){
                         createLocalMsp(organization_name,orderers_names.get(i),false);
                         download_orderer_bin(orderers_names.get(i));
+                        configure_orderer(orderers_names.get(i),organization_name, num_orderer>1);
                     }
                     break;
                 }
                 case 2:{
+                    first_peer=null;
                     System.out.print("Peer Organization Name: ");
                     String organization_name=in.next();
                     executeWSLCommand("cd "+mainDirectory+"/organizations/peerOrganizations &&"
@@ -860,9 +806,11 @@ public class Blockchain {
                     int num_peer=in.nextInt();
                     LinkedList<String> peers_names=new LinkedList<String>();
                     for(int i=1;i<=num_peer;i++){
+                        
                         System.out.print("Peer "+i+" Name: ");
                         String peer_name=in.next()+"."+organization_name;
                         peers_names.add(peer_name);
+                        if(i==1) first_peer=peer_name;
                         executeWSLCommand("cd "+mainDirectory+"/organizations/peerOrganizations/"+organization_name+"/peers &&"
                                 + "mkdir "+peer_name+" &&"
                                 + "cd "+peer_name+" &&"
@@ -930,18 +878,13 @@ public class Blockchain {
         peer.put("id", peer_name);
         
         //NETWORK ID
-        System.out.print("networkId (es. dev, test, production ...): ");
-        String risp= in.next();
         peer.put("networkId", "dev");
         
         //LISTEN ADDRESS   
-        System.out.print("Listen address (es. 0.0.0.0)");
-        String add=in.next();
-        int port;
+        String add="0.0.0.0";
+        int port=7050;
         do{
-            System.out.print("Port (es. 7051): ");
-            port=in.nextInt();
-            System.out.println((ports_used.contains(port))? "Port already in use, try another one":"");
+            port++;
         }while(ports_used.contains(port));
         
         peer.put("listenAddress",add+":"+port);
@@ -950,18 +893,13 @@ public class Blockchain {
         peer.put("address",peer_name+":"+port);
         
         //CHAINCODE LISTEN ADDRESS
-        System.out.println("Chaincode listen address (es. 0.0.0.0)");
-        add=in.next();
-        int portC;
         do{
-            System.out.print("Port (es. 7052): ");
-            portC=in.nextInt();
-            System.out.println((ports_used.contains(portC))? "Port already in use, try another one":"");
-        }while(ports_used.contains(portC));
-        peer.put("chaincodeListenAddress",add+":"+portC);
+            port++;
+        }while(ports_used.contains(port));
+        peer.put("chaincodeListenAddress",add+":"+port);
         
         //CHAINCODE ADDRESS
-        peer.put("chaincodeAddress", peer_name+":"+portC);
+        peer.put("chaincodeAddress", peer_name+":"+port);
         
         //MSP CONFIG PATH
         String path=executeWSLCommandToString("echo $(pwd)");
@@ -979,8 +917,7 @@ public class Blockchain {
         System.out.println("Gossip configuration for " + peer_name);
 
         // Bootstrap
-        System.out.print("Name of a bootstrap peer (different from " + peer_name + ") in the same organization (e.g., p0): ");
-        String bootstrapPeer = in.next();
+        String bootstrapPeer = (first_peer==peer_name)? "":first_peer;
         gossip.put("bootstrap", bootstrapPeer + "." + org_name + ":7051");
 
         // Endpoint interno
@@ -991,8 +928,8 @@ public class Blockchain {
         gossip.put("externalEndpoint", peerEndpoint);
 
         // Leader Election
-        System.out.print("Should the peer use automatic leader election? (true/false): ");
-        boolean useLeaderElection = in.nextBoolean();
+        System.out.print("Should the peer use automatic leader election? (y/n): ");
+        boolean useLeaderElection = (in.next()=="y")? true:false;
         gossip.put("useLeaderElection", useLeaderElection);
 
         // Org leader
@@ -1033,8 +970,7 @@ public class Blockchain {
         tls.put("enabled", tlsEnabled);
 
         // Abilita mutual TLS (clientAuthRequired)
-        System.out.print("Mutual TLS required (clientAuthRequired)? (true/false): ");
-        boolean clientAuthRequired = in.nextBoolean();
+        boolean clientAuthRequired = false;
         tls.put("clientAuthRequired", clientAuthRequired);
 
         // Percorso base per i file TLS
@@ -1070,7 +1006,7 @@ public class Blockchain {
         
         // Select BCCSP provider
         System.out.print("Select BCCSP provider (SW or PKCS11): ");
-        String defaultProvider = in.next().toUpperCase();
+        String defaultProvider = "SW";
         bccsp.put("Default", defaultProvider);
 
         // Configuration for SW (Software Crypto)
@@ -1190,9 +1126,7 @@ public class Blockchain {
 
         // Snapshot configuration
         Map<String, Object> snapshots = new LinkedHashMap<>();
-        System.out.print("Enter the path to store ledger snapshots (e.g., /var/hyperledger/production/snapshots): ");
-        String snapshotDir = in.nextLine().trim();
-        snapshots.put("rootDir", snapshotDir);
+        snapshots.put("rootDir", "/var/hyperledger/production/snapshots");
 
         ledger.put("snapshots", snapshots);
         
@@ -1200,28 +1134,20 @@ public class Blockchain {
         Map<String, Object> operations=(Map<String, Object>) data.get("operations");
         
         // Operations server listen address
-        System.out.print("Enter operations server address (e.g., 127.0.0.1): ");
-        String opAddress = in.nextLine().trim();
-        int opPort;
+        String opAddress = "127.0.0.1";
+        int opPort=port;
         do {
-            System.out.print("Enter operations server port (e.g., 9443): ");
-            opPort = in.nextInt();
-            in.nextLine(); // consume newline
-            if (ports_used.contains(opPort)) {
-                System.out.println("Port already in use, please choose another one.");
-            }
+            opPort++;
         } while (ports_used.contains(opPort));
         operations.put("listenAddress", opAddress + ":" + opPort);
 
         // TLS configuration
         Map<String, Object> operations_tls = new LinkedHashMap<>();
 
-        System.out.print("Enable TLS for operations endpoint? (true/false): ");
-        boolean operations_tlsEnabled = in.nextBoolean();
+        boolean operations_tlsEnabled = false;
         operations_tls.put("enabled", operations_tlsEnabled);
-        in.nextLine(); // consume newline
 
-        if (operations_tlsEnabled) {
+        /*if (operations_tlsEnabled) {
             Map<String, Object> operations_cert = new LinkedHashMap<>();
             Map<String, Object> operations_key = new LinkedHashMap<>();
 
@@ -1248,23 +1174,22 @@ public class Blockchain {
             Map<String, Object> clientRootCAs = new LinkedHashMap<>();
             clientRootCAs.put("files", caFiles);
             operations_tls.put("clientRootCAs", clientRootCAs);
-        }
+        }*/
 
         operations.put("tls", operations_tls);
         
         Map<String, Object> metrics= (Map<String, Object>)data.get("metrics");
-        System.out.print("Enter metrics provider (disabled, prometheus, statsd): ");
-        String provider;
+        /*String provider;
         while (true) {
             provider = in.nextLine().trim().toLowerCase();
             if (provider.equals("disabled") || provider.equals("prometheus") || provider.equals("statsd")) {
                 break;
             }
             System.out.print("Invalid provider. Please enter one of: disabled, prometheus, statsd: ");
-        }
-        metrics.put("provider", provider);
+        }*/
+        metrics.put("provider", "disabled");
 
-        if (provider.equals("statsd")) {
+        /*if (provider.equals("statsd")) {
             Map<String, Object> statsd = new LinkedHashMap<>();
 
             System.out.print("Enter network type (tcp/udp): ");
@@ -1280,7 +1205,7 @@ public class Blockchain {
             statsd.put("address", in.nextLine().trim());
 
             metrics.put("statsd", statsd);
-        }
+        }*/
         
         //Writing
         DumperOptions options = new DumperOptions();
@@ -1324,7 +1249,7 @@ public class Blockchain {
     }
     
     
-    public static void configure_orderer(String orderer_name, String org_name) throws FileNotFoundException, IOException{
+    public static void configure_orderer(String orderer_name, String org_name, boolean needClusterConfig) throws FileNotFoundException, IOException{
         Scanner in= new Scanner(System.in);
         System.out.println("------------ ORDERER "+orderer_name+"."+org_name+" CONFIGURATION ------------");
         File orderer_config=new File(""+ mainDirectory +"/orderers_bin/"+orderer_name+"/config/orderer.yaml");
@@ -1333,84 +1258,78 @@ public class Blockchain {
         Map<String, Object> general= (Map<String, Object>) data.get("general");
         
         // LISTEN ADDRESS & PORT
-        System.out.println("Listen address (The IP on which to bind to listen)");
-        String add=in.next();
-        general.put("ListenAddress", add);
+        general.put("ListenAddress", "0.0.0.0");
         
-        System.out.println("Listen port (The port on which to bind to listen, es 7050)");
-        int port;
+        int port=7049;
         do{
-            port=in.nextInt();
-            System.out.println((ports_used.contains(port))? "Port already in use, try another one":"");
+            port++;
         }while(ports_used.contains(port));
         
         general.put("ListenPort", port);
         
         //TLS
         Map<String, Object> general_tls=(Map<String,Object>)general.get("tls");
-        System.out.println("Enable TLS? (y/n)");
-        if(in.next().equals("y")){
-            general_tls.put("Enabled", true);
-            general_tls.put("PrivateKey", "/etc/hyperledger/fabric/tls/key");
-            
-            general_tls.put("Certificate", "/etc/hyperledger/fabric/tls/cert.pem"); 
-            
-            System.out.println("Enable mutual TLS?(y/n)");
-            if(in.next().equals("y")){
-                general_tls.put("ClientAuthRequired", true);
-                List<String> clientRootCAs = new ArrayList<>();
-                
-                
-                clientRootCAs.add("/etc/hyperledger/fabric/tls/tls-ca-cert.pem");
+        general_tls.put("Enabled", true);
+        general_tls.put("PrivateKey", "/etc/hyperledger/fabric/tls/key");
 
-                general_tls.put("ClientRootCAs", clientRootCAs);
-            }
+        general_tls.put("Certificate", "/etc/hyperledger/fabric/tls/cert.pem"); 
+
+        System.out.println("Enable mutual TLS?(y/n)");
+        if(in.next().equals("y")){
+            general_tls.put("ClientAuthRequired", true);
+            List<String> clientRootCAs = new ArrayList<>();
+
+
+            clientRootCAs.add("/etc/hyperledger/fabric/tls/tls-ca-cert.pem");
+
+            general_tls.put("ClientRootCAs", clientRootCAs);
         }
         
         
         // CLUSTER
-        Map<String, Object> general_cluster = (Map<String, Object>) general.get("Cluster");
+        if(needClusterConfig){
+            Map<String, Object> general_cluster = (Map<String, Object>) general.get("Cluster");
 
-        general_cluster.put("SendBufferSize", 100);
+            general_cluster.put("SendBufferSize", 100);
 
-        System.out.println("Use a separate listener for intra-cluster communication? (y/n)");
-        if (in.next().equals("y")) {
+            System.out.println("Use a separate listener for intra-cluster communication? (y/n)");
+            if (in.next().equals("y")) {
 
-            System.out.println("Insert the IP address to listen for intra-cluster communication (e.g., 127.0.0.1):");
-            String clusterAddress = in.next();
-            general_cluster.put("ListenAddress", clusterAddress);
+                
+                general_cluster.put("ListenAddress", "0.0.0.0");
 
-            System.out.println("Insert the port to listen for intra-cluster communication (e.g., 9444):");
-            int clusterPort = in.nextInt();
-            general_cluster.put("ListenPort", clusterPort);
+                
+                general_cluster.put("ListenPort", 7049);
 
-            String certPath = "$(pwd)/" + mainDirectory + "/organizations/ordererOrganizations/" + org_name + "/orderers/" + orderer_name + "/tls/server.crt";
-            String keyPath = "$(pwd)/" + mainDirectory + "/organizations/ordererOrganizations/" + org_name + "/orderers/" + orderer_name + "/tls/server.key";
+                String certPath = "$(pwd)/" + mainDirectory + "/organizations/ordererOrganizations/" + org_name + "/orderers/" + orderer_name + "/tls/server.crt";
+                String keyPath = "$(pwd)/" + mainDirectory + "/organizations/ordererOrganizations/" + org_name + "/orderers/" + orderer_name + "/tls/server.key";
 
-            general_cluster.put("ServerCertificate", certPath);
-            general_cluster.put("ServerPrivateKey", keyPath);
+                general_cluster.put("ServerCertificate", certPath);
+                general_cluster.put("ServerPrivateKey", keyPath);
 
-            // Set client cert and key (could be reused or different)
-            general_cluster.put("ClientCertificate", certPath);
-            general_cluster.put("ClientPrivateKey", keyPath);
+                // Set client cert and key (could be reused or different)
+                general_cluster.put("ClientCertificate", certPath);
+                general_cluster.put("ClientPrivateKey", keyPath);
 
-            System.out.println("Separate cluster listener has been enabled with mutual TLS.");
-        } else {
-            System.out.println("Using default listener and TLS credentials for cluster communication.");
-            // If user doesn’t enable separate listener, no need to set extra fields
+                System.out.println("Separate cluster listener has been enabled with mutual TLS.");
+            } else {
+                System.out.println("Using default listener and TLS credentials for cluster communication.");
+                // If user doesn’t enable separate listener, no need to set extra fields
+            }
         }
+        
 
         
         
         //BOOTSTRAP METHOD
-        System.out.println("Do you want to create this node on a network that is not using a system channel?(y/n)");
+        /*System.out.println("Do you want to create this node on a network that is not using a system channel?(y/n)");
         boolean k=in.next().equals("y");
          if (k) {
              general.put("BoostrapMethod","none");
              //BoostrapFile
              System.out.println("insert the location and name fo the system channel genesis block");
              general.put("BoostrapFile",in.next());
-         }
+         }*/
         
         //LOCAL MSP DIR
         general.put("LocalMSPDir", "$(pwd)/"+mainDirectory+"/organizations/ordererOrganizations/"+org_name+"/orderers/"+orderer_name+"/msp");
@@ -1419,12 +1338,20 @@ public class Blockchain {
         // BCCSP
         Map<String, Object> general_bccsp = (Map<String, Object>) general.get("BCCSP");
 
-        System.out.println("Which crypto provider do you want to use? (SW/PKCS11)");
-        String provider = in.next().toUpperCase();
+        //System.out.println("Which crypto provider do you want to use? (SW/PKCS11)");
+        //String provider = in.next().toUpperCase();
 
-        general_bccsp.put("Default", provider);
+        general_bccsp.put("Default", "SW");
+        Map<String, Object> sw = new HashMap<>();
+        sw.put("Hash", "SHA2");
+        sw.put("Security", 256);
 
-        if (provider.equals("SW")) {
+        Map<String, Object> fileKeyStore = new HashMap<>();
+        fileKeyStore.put("KeyStore", "$(pwd)/" + mainDirectory + "/organizations/ordererOrganizations/" + org_name + "/orderers/" + orderer_name + "/msp/keystore");
+        sw.put("FileKeyStore", fileKeyStore);
+
+        general_bccsp.put("SW", sw);
+        /*if (provider.equals("SW")) {
             Map<String, Object> sw = new HashMap<>();
             sw.put("Hash", "SHA2");
             sw.put("Security", 256);
@@ -1458,7 +1385,7 @@ public class Blockchain {
         } else {
             System.out.println("Invalid provider. Defaulting to SW.");
             general_bccsp.put("Default", "SW");
-        }
+        }*/
 
         //FILE LEDGER
         Map<String, Object> fileLedger = (Map<String, Object>) data.get("FileLedger");
@@ -1469,11 +1396,12 @@ public class Blockchain {
         System.out.println("Do you want to use the operations service?(y/n)");
         if (in.next().equals("y")) {
             Map<String, Object> operations =(Map<String, Object>) data.get("Operations");
-            System.out.print("Address of the operations server: ");
-            String op_server_add=in.next();
-            System.out.print("Port of the operations server: ");
-            int op_server_port=in.nextInt();
-            operations.put("ListenAddress", op_server_add+":"+op_server_port);
+            String op_server_add="0.0.0.0";
+            port=9443;
+            do{
+                port++;
+            }while(ports_used.contains(port));
+            operations.put("ListenAddress", op_server_add+":"+port);
             
             operations.put("Certificate","/etc/hyperledger/fabric/tls/cert.pem"); 
             operations.put("PrivateKey","/etc/hyperledger/fabric/tls/key");
@@ -1495,32 +1423,12 @@ public class Blockchain {
         Map<String, Object> metrics = (Map<String, Object>) data.get("Metrics");
 
         System.out.println("Select metrics provider (prometheus / statsd / disabled):");
-        provider = in.next().toLowerCase();
 
-        if (!provider.equals("prometheus") && !provider.equals("statsd") && !provider.equals("disabled")) {
-            System.out.println("Invalid provider. Defaulting to 'disabled'.");
-            provider = "disabled";
-        }
+        
 
-        metrics.put("Provider", provider);
+        metrics.put("Provider", "disabled");
 
-        if (provider.equals("statsd")) {
-            Map<String, Object> statsd = new LinkedHashMap<>();
-
-            System.out.println("Enter StatsD network type (tcp/udp):");
-            statsd.put("Network", in.next());
-
-            System.out.println("Enter StatsD server address (e.g. 127.0.0.1:8125):");
-            statsd.put("Address", in.next());
-
-            System.out.println("Enter write interval (e.g. 30s):");
-            statsd.put("WriteInterval", in.next());
-
-            System.out.println("Enter metrics prefix:");
-            statsd.put("Prefix", in.next());
-
-            metrics.put("Statsd", statsd);
-        }
+        
         
         //ADMIN
         Map<String, Object> admin =(Map<String, Object>) data.get("Admin");
@@ -1544,24 +1452,10 @@ public class Blockchain {
         channelParticipation.put("MaxRequestBodySize", "1 MB");
         //CONSENSUS
         Map<String, Object> consensus = (Map<String, Object>) data.get("Consensus");
+        consensus.put("WALDir", "/var/hyperledger/production/orderer/etcdraft/wal");
+        consensus.put("SnapDir", "/var/hyperledger/production/orderer/etcdraft/snapshot");
 
-        System.out.println("Set custom WALDir path? (default is /var/hyperledger/production/orderer/etcdraft/wal) (y/n)");
-        if (in.next().toLowerCase().equals("y")) {
-            System.out.print("Enter WALDir path: ");
-            String walDir = in.next();
-            consensus.put("WALDir", walDir);
-        } else {
-            consensus.put("WALDir", "/var/hyperledger/production/orderer/etcdraft/wal");
-        }
-
-        System.out.println("Set custom SnapDir path? (default is /var/hyperledger/production/orderer/etcdraft/snapshot) (y/n)");
-        if (in.next().toLowerCase().equals("y")) {
-            System.out.print("Enter SnapDir path: ");
-            String snapDir = in.next();
-            consensus.put("SnapDir", snapDir);
-        } else {
-            consensus.put("SnapDir", "/var/hyperledger/production/orderer/etcdraft/snapshot");
-        }
+        
         //Aggiunta dell'orderer al file docker-compose.yaml
         String path=executeWSLCommandToString("echo $(pwd)");
         String mspPath=path+"/"+mainDirectory+"/organizations/ordererOrganizations/"+org_name+"/orderers/"+orderer_name+"/msp";
