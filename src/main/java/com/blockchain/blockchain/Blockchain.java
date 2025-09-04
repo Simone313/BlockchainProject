@@ -1669,6 +1669,40 @@ public class Blockchain {
         }
     }
     
+    private static void createGenesisBlock(LinkedList<String> ordererEndpoints, LinkedList<String> consenters, LinkedList<String> profiles) throws FileNotFoundException, IOException{
+        downloadBinForGenesisBlock();
+        
+        //CONFIGURAZIONE CONFIGTX.YAML 
+        Yaml yaml = new Yaml();
+        File file = new File(mainDirectory + "/bin/configtx.yaml");
+        
+        Map<String,Object> data;
+        try (InputStream inputStream = new FileInputStream(file)) {
+            data = yaml.load(inputStream);
+        }
+        
+        ((Map<String,Object>) data.get("Organizations")).put("OrdererEndpoints", ordererEndpoints);
+        
+        Map<String,Object> orderer=(Map<String,Object>) data.get("Orderer");
+        orderer.put("OrdererType", "etcdraft");
+        
+        ((Map<String,Object>) orderer.get("EtcdRaft")).put("Consenters", consenters);
+        
+        //CREAZIONE DEL GENESIS BLOCK
+        
+        executeWSLCommand("cp $(pwd)/"+mainDirectory+"/bin"
+                + "configtxgen -profile SampleAppGenesisEtcdRaft -outputBlock genesis_block.pb -channelID channel1");
+    }
+    
+    /**
+     * This method is used to install all the binaries needed for the creation of the genesis block
+     */
+    private static void downloadBinForGenesisBlock(){
+        executeWSLCommand("cp $(pwd)/"+mainDirectory+"/bin"
+                + "curl -L https://github.com/hyperledger/fabric/releases/download/v2.5.0/hyperledger-fabric-linux-amd64-2.5.0.tar.gz -o fabric-bin.tar.gz"
+                + "tar -xvzf fabric-bin.tar.gz --strip-components=1");
+    }
+    
     
     
     /**
