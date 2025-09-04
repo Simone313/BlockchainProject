@@ -3,6 +3,28 @@
  * Click nbfs://nbhost/SystemFileSystem/Templates/Project/Maven2/JavaApp/src/main/java/${packagePath}/${mainClassName}.java to edit this template
  */
 
+
+/*
+    Next steps
+    Blockchain networks are all about connection, so once you’ve deployed nodes, 
+    you’ll obviously want to connect them to other nodes! If you have a peer 
+    organization and a peer, you’ll want to join your organization to a consortium 
+    and join or Create a channel. If you have an ordering node, you will want to 
+    add peer organizations to your consortium. You’ll also want to learn how to 
+    develop chaincode, which you can learn about in the topics Smart Contracts 
+    and Chaincode and Writing Your First Chaincode.
+
+    Part of the process of connecting nodes and creating channels will involve 
+    modifying policies to fit the use cases of business networks. 
+    For more information about policies, check out Policies.
+
+    One of the common tasks in a Fabric will be the editing of existing channels. 
+    For a tutorial about that process, check out Updating a channel configuration. 
+    One popular channel update is to add an org to an existing channel. For a 
+    tutorial about that specific process, check out Adding an Org to a Channel. 
+    For information about upgrading nodes after they have been deployed, check 
+    out Upgrading your components.
+*/
 package com.blockchain.blockchain;
 
 /**
@@ -35,7 +57,7 @@ public class Blockchain {
     static String org_name;
     static String org_psw;
     static String fabric_ca_server_name;
-    static LinkedList<Integer> ports_used;
+    static LinkedList<Integer> ports_used=new LinkedList<Integer>();
     static int inter_port;
     static int server_port;
     static String tls_ca_name;
@@ -425,9 +447,6 @@ public class Blockchain {
 
 
         //TLS
-        System.out.println("Do you want to enable TLS? s/n");
-        String risp=in.next();
-        boolean tlsEn=true;
         Map<String,Object> tls=(Map<String,Object>) data.get("tls");
         tls.put("enabled",true);
 
@@ -435,7 +454,7 @@ public class Blockchain {
         tls.put("keyfile", "fabric-ca-client/tls-ca/rcaadmin/msp/keystore");
 
         System.out.println("Do you want to activate the mutual TLS option? s/n");
-        risp=in.next();
+        String risp=in.next();
         if(risp.equals("n")){
         }else{
             Map<String,Object> tls_clientauth= (Map<String,Object>) tls.get("clientauth");
@@ -490,7 +509,7 @@ public class Blockchain {
         }
         System.out.println("Config updated");
 
-        addCAtoDocker(org_ca_name, tlsEn, server_port, server_name, false);
+        addCAtoDocker(org_ca_name, true, 7055, server_name, false);
             
     }
     
@@ -844,7 +863,7 @@ public class Blockchain {
         //download dei bin
         executeWSLCommand("cd "+mainDirectory+"/orderers_bin &&"
                 + "mkdir "+orderer_name);
-        executeWSLCommand("cd "+mainDirectory+"/ordererss_bin/"+orderer_name+" &&"
+        executeWSLCommand("cd "+mainDirectory+"/orderers_bin/"+orderer_name+" &&"
                 + "curl -L -O https://github.com/hyperledger/fabric/releases/download/v3.1.1/hyperledger-fabric-linux-amd64-3.1.1.tar.gz &&"
                 + "tar -xvzf hyperledger-fabric-linux-amd64-3.1.1.tar.gz &&"
                 + "rm hyperledger-fabric-linux-amd64-3.1.1.tar.gz");
@@ -1005,7 +1024,6 @@ public class Blockchain {
         Map<String, Object> bccsp=(Map<String, Object>) peer.get("BCCSP");
         
         // Select BCCSP provider
-        System.out.print("Select BCCSP provider (SW or PKCS11): ");
         String defaultProvider = "SW";
         bccsp.put("Default", defaultProvider);
 
@@ -1017,13 +1035,7 @@ public class Blockchain {
 
             Map<String, Object> fileKeyStore = new LinkedHashMap<>();
 
-            // Optional FileKeyStore path
-            System.out.print("Enter FileKeyStore path (leave empty to use default): ");
-            in.nextLine(); // consume newline
-            String fileKeyStorePath = in.nextLine().trim();
-            fileKeyStore.put("KeyStore", fileKeyStorePath);
-
-            sw.put("FileKeyStore", fileKeyStore);
+            
             bccsp.put("SW", sw);
         }
 
@@ -1242,7 +1254,7 @@ public class Blockchain {
         add_peer_to_docker(peer_name,cfgPath,mspPath,tlsPath,ports, cDB);
         
         System.out.println("Starting the peer...");
-        new peerThread(peer_name);
+        new peerThread(peer_name, cDB);
         
         waitForContainer(peer_name);
         
@@ -1255,8 +1267,11 @@ public class Blockchain {
         File orderer_config=new File(""+ mainDirectory +"/orderers_bin/"+orderer_name+"/config/orderer.yaml");
         Yaml yaml= new Yaml();
         Map<String, Object> data= yaml.load(new FileReader(orderer_config));
-        Map<String, Object> general= (Map<String, Object>) data.get("general");
+        Map<String, Object> general= (Map<String, Object>) data.get("General");
         
+        //rimozione di Backoff e Throttling (chiavi non valide per la versione di fabric utilizzata)
+        general.remove("Backoff");
+        general.remove("Throttling");
         // LISTEN ADDRESS & PORT
         general.put("ListenAddress", "0.0.0.0");
         
@@ -1268,7 +1283,7 @@ public class Blockchain {
         general.put("ListenPort", port);
         
         //TLS
-        Map<String, Object> general_tls=(Map<String,Object>)general.get("tls");
+        Map<String, Object> general_tls=(Map<String,Object>)general.get("TLS");
         general_tls.put("Enabled", true);
         general_tls.put("PrivateKey", "/etc/hyperledger/fabric/tls/key");
 
@@ -1455,7 +1470,17 @@ public class Blockchain {
         consensus.put("WALDir", "/var/hyperledger/production/orderer/etcdraft/wal");
         consensus.put("SnapDir", "/var/hyperledger/production/orderer/etcdraft/snapshot");
 
-        
+        //Writing
+        DumperOptions options = new DumperOptions();
+        options.setIndent(2);
+        options.setPrettyFlow(true);
+        options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+        Yaml yamlWriter = new Yaml(options);
+
+        try (FileWriter writer = new FileWriter(orderer_config)) {
+            yamlWriter.dump(data, writer);
+        }
+        System.out.println("Config updated");
         //Aggiunta dell'orderer al file docker-compose.yaml
         String path=executeWSLCommandToString("echo $(pwd)");
         String mspPath=path+"/"+mainDirectory+"/organizations/ordererOrganizations/"+org_name+"/orderers/"+orderer_name+"/msp";
@@ -1582,7 +1607,7 @@ public class Blockchain {
         peerConfig.put("command", "peer node start");
         if(couchDB){
             // Dipendenze, cioè i container che deve aspettare prima di avviarsi
-            peerConfig.put("depends_on", "couchdb");
+            peerConfig.put("depends_on", Arrays.asList("couchdb"));
         }
         
         services.put(peerName, peerConfig);
@@ -1618,9 +1643,9 @@ public class Blockchain {
         ordererConfig.put("image", "hyperledger/fabric-orderer");
 
         List<String> env = new ArrayList<>();
-        env.add("FABRIC_CFG_PATH=" + cfgPath);
-        env.add("ORDERER_GENERAL_LOCALMSPDIR=" + mspPath);
-        env.add("ORDERER_GENERAL_LOCALMSPID=" + mspId);
+        env.add("FABRIC_CFG_PATH=" + "/etc/hyperledger/fabric/tls");
+        env.add("ORDERER_GENERAL_LOCALMSPDIR=" + "/etc/hyperledger/fabric/msp");
+        env.add("ORDERER_GENERAL_LOCALMSPID=" + "SampleOrg");
         ordererConfig.put("environment", env);
 
         List<String> volumes = new ArrayList<>();
@@ -1709,7 +1734,7 @@ public class Blockchain {
      * It is used to ensure that the program waits for the specified container to start.
      * @param containerName Name of the container whose startup must be awaited.
      */
-    private static void waitForContainer(String containerName){
+    public static void waitForContainer(String containerName){
         boolean ready= false;
         while(!ready){
           String output= executeWSLCommandToString("cd "+mainDirectory+" && docker ps"); 

@@ -24,8 +24,8 @@ crl:
 registry:
   maxenrollments: -1
   identities:
-  - name: u1
-    pass: u1Psw
+  - name: u
+    pass: uPsw
     type: client
     affiliation: ''
     attrs:
