@@ -14,7 +14,7 @@ tls:
     type: noclientcert
     certfiles: $(pwd)/Prova/fabric-ca-server-tls/msp/keystore/tls-ca-cert.pem
 ca:
-  name: tls-ca
+  name: tls
   keyfile: null
   certfile: null
   chainfile: null
@@ -25,7 +25,7 @@ registry:
   maxenrollments: -1
   identities:
   - name: admin
-    pass: adminp
+    pass: adminPsw
     type: client
     affiliation: ''
     attrs:

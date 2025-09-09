@@ -590,94 +590,38 @@ public class Blockchain {
             
             
             //TLS
-            System.out.println("Do you want to enable TLS? s/n");
+            Map<String,Object> tls=(Map<String,Object>) data.get("tls");
+            tls.put("enabled",true);
+
+            tls.put("certfile", "fabric-ca-client/tls-ca/rcaadmin/msp/signcerts/cert.pem");
+            tls.put("keyfile", "fabric-ca-client/tls-ca/rcaadmin/msp/keystore");
+
+            System.out.println("Do you want to activate the mutual TLS option? s/n");
             String risp=in.next();
-            boolean tlsEn=false;
             if(risp.equals("n")){
-                
             }else{
-                tlsEn=true;
-                Map<String,Object> tls=(Map<String,Object>) data.get("tls");
-                tls.put("enabled",true);
-                
-                tls.put("certfile", "fabric-ca-client/tls-ca/rcaadmin/msp/signcerts/cert.pem");
-                tls.put("keyfile", "fabric-ca-client/tls-ca/rcaadmin/msp/keystore");
-                
-                System.out.println("Do you want to activate the mutual TLS option? s/n");
-                risp=in.next();
-                if(risp.equals("n")){
-                }else{
-                    Map<String,Object> tls_clientauth= (Map<String,Object>) tls.get("clientauth");
-                    tls_clientauth.put("type", "RequireAndVerifyClientCert");
-                }
-                
-                
+                Map<String,Object> tls_clientauth= (Map<String,Object>) tls.get("clientauth");
+                tls_clientauth.put("type", "RequireAndVerifyClientCert");
             }
             
-            //CAFILES  
-            System.out.println("Do you want to configure a dual-headed CA? s/n");
-            risp=in.next();
-            if(risp.equals("n")){
-            }else{
-                //  TODO creare un organization ca ed inserire il percorso che porta al suo fabric-caserver-config.yaml
-            }
             
-            //INTERMEDIATE CA
-            System.out.println("Is this an intermediate CA? s/n");
-            risp=in.next();
-            if(risp.equals("n")){
-            }else{
-                intermediate=true;
-                Map<String,Object> intermediate=(Map<String,Object>) data.get("intermediate");
-                Map<String,Object> intermediate_parentserver=(Map<String,Object>) intermediate.get("parentserver");
-                System.out.print("Parentserver url: ");
-                String url=in.next();
-                System.out.print("Parentserver caname: ");
-                String caname=in.next();
-                intermediate_parentserver.put("url", url);
-                intermediate_parentserver.put("caname", caname);
-                
-                Map<String,Object> intermediate_enrollment=(Map<String,Object>) intermediate.get("enrollment");
-                intermediate_enrollment.put("hosts",int_ca_name);
-                intermediate_enrollment.put("profile", "tls");
-                intermediate_enrollment.put("label", "tls-ca-intermediate");
-                
-                //TODO una volta generati i certificati del TLS riportarli nella sezione intermediate
-            }
+            
+            
+            
             
             //PORT
-            boolean k=true;
-            while(k){
-                System.out.print("Enter the server port (es. 7056): ");
-                inter_port=in.nextInt();
-                if(!ports_used.contains(inter_port)){
-                    k=false;
-                }else{
-                    System.out.println("Port already in use, try another one.");
-                }
+            inter_port=7056;
+            while(ports_used.contains(inter_port)){
+                inter_port++;
             }
             
             ports_used.add(inter_port);
-            data.put("port", inter_port);
+            data.put("ports", inter_port);
             
             //DB
-            System.out.println("Which type of database do you want to use?");
-            System.out.println("1- SQLite Version 3");
-            System.out.println("2- PostgresSQL");
-            System.out.println("3- MySQL");
-            int risDB=in.nextInt();
             Map<String,Object> db=(Map<String,Object>) data.get("db");
-            switch(risDB){
-                case 1 -> {
-                    db.put("type", "sqlite3");
-                }
-                case 2 -> {
-                    db.put("type", "postgres");
-                }
-                case 3 -> {
-                    db.put("type", "mysql");
-                }
-            }
+            db.put("type", "sqlite3");
+            
             Map<String, Object> csr = (Map<String, Object>) data.get("csr");
 
             ArrayList<String> hosts = (ArrayList<String>) csr.get("hosts");
@@ -695,7 +639,7 @@ public class Blockchain {
             }
             System.out.println("Config updated");
             String server_name= "fabric-ca-server-int-ca";
-            addCAtoDocker(int_ca_name, tlsEn, inter_port, server_name, true);
+            addCAtoDocker(int_ca_name, true, inter_port, server_name, true);
     }
     
     

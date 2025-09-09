@@ -14,7 +14,7 @@ tls:
     type: noclientcert
     certfiles: null
 ca:
-  name: org-ca
+  name: org
   keyfile: null
   certfile: null
   chainfile: null
