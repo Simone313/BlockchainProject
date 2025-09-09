@@ -45,6 +45,7 @@ import java.util.Map;
 import java.util.Scanner;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.yaml.snakeyaml.LoaderOptions;
 public class Blockchain {
     
     static LinkedList<ServerCA> server_list= new LinkedList<ServerCA>();
@@ -71,6 +72,8 @@ public class Blockchain {
         createDirectory(mainDirectory);
         setupCA(yourPin);
         
+        
+        createGenesisBlock();
         //metodo per creare il sistema di cartelle delle organizzazioni
         createDirectoryForOrganizations();
         
@@ -273,7 +276,7 @@ public class Blockchain {
                 "version: '3'\n" +
                 "services:\n" +
                 "  ca_server:\n" +
-                "    image: hyperledger/fabric-ca:1.5\n" +
+                "    image: hyperledger/fabric-ca:1.5.15\n" +
                 "    container_name: "+tls_ca_name+"\n" +
                 "    ports:\n" +
                 "      - \"7054:7054\"\n" +
@@ -523,7 +526,7 @@ public class Blockchain {
         
         //add organization CA service
         Map<String, Object> caOrg1 = new LinkedHashMap<>();
-        caOrg1.put("image", "hyperledger/fabric-ca");
+        caOrg1.put("image", "hyperledger/fabric-ca:1.5.15");
         caOrg1.put("container_name",name);
         caOrg1.put("environment", Arrays.asList(
             "FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server",
@@ -1536,7 +1539,7 @@ public class Blockchain {
                 + "./fabric-ca-client enroll -u https://"+name+":"+psw+"@localhost:7055 --mspdir $(pwd)/"+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp --csr.hosts 'host1' --tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-server-org1/tls/cert.pem");
     }
     
-    private static void createLocalMsp(String org_name, String node_name, boolean peer_org){
+    /*private static void createLocalMsp(String org_name, String node_name, boolean peer_org){
         String org_directory= peer_org? "peerOrganizations/"+org_name+"/peers/"+node_name+"/":"ordererOrganizations/"+org_name+"/orderers/"+node_name+"/";
          executeWSLCommand("cd "+ mainDirectory +"/fabric-ca-client &&"
                     + "export FABRIC_CA_CLIENT_HOME=$(pwd)/tls-ca/rcaadmin &&"
@@ -1555,7 +1558,52 @@ public class Blockchain {
         executeWSLCommand("cp $(pwd)/"+mainDirectory+"/organizations/"+org_directory+"msp/keystore/key $(pwd)/"+mainDirectory+"/organizations/"+org_directory+"tls");
         //copia del tls-root-cert
         executeWSLCommand("cp $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem $(pwd)/"+mainDirectory+"/organizations/"+org_directory+"tls");
+    }*/
+    
+    private static void createLocalMsp(String org_name, String node_name, boolean peer_org) {
+        String org_directory = peer_org
+                ? "peerOrganizations/" + org_name + "/peers/" + node_name + "/"
+                : "ordererOrganizations/" + org_name + "/orderers/" + node_name + "/";
+
+        // Registrazione identità (per MSP e TLS)
+        executeWSLCommand("cd " + mainDirectory + "/fabric-ca-client &&"
+                + "export FABRIC_CA_CLIENT_HOME=$(pwd)/tls-ca/rcaadmin &&"
+                + "./fabric-ca-client register -d --id.name " + node_name + " --id.secret " + node_name + "_PSW "
+                + "-u https://localhost:7055 "
+                + "--tls.certfiles $(pwd)/" + mainDirectory + "/fabric-ca-server-org1/tls/cert.pem "
+                + "--mspdir $(pwd)/" + mainDirectory + "/fabric-ca-client/org1-ca/rcaadmin/msp "
+                + "--id.type admin");
+
+        // Enrollment per MSP (identità)
+        executeWSLCommand("cd " + mainDirectory + "/fabric-ca-client &&"
+                + "./fabric-ca-client enroll -u https://" + node_name + ":" + node_name + "_PSW@localhost:7055 "
+                + "--mspdir $(pwd)/" + mainDirectory + "/organizations/" + org_directory + "msp "
+                + "--csr.hosts " + node_name + " "
+                + "--tls.certfiles $(pwd)/" + mainDirectory + "/fabric-ca-server-org1/tls/cert.pem");
+
+        // Aggiungo admincerts (legacy ma ancora richiesto in alcuni setup)
+        executeWSLCommand("mkdir -p " + mainDirectory + "/organizations/" + org_directory + "msp/admincerts &&"
+                + "cp " + mainDirectory + "/organizations/" + (peer_org ? "peerOrganizations/" : "ordererOrganizations/")
+                + org_name + "/msp/signcerts/cert.pem "
+                + mainDirectory + "/organizations/" + org_directory + "msp/admincerts");
+
+        // Enrollment TLS separato
+        executeWSLCommand("cd " + mainDirectory + "/fabric-ca-client &&"
+                + "./fabric-ca-client enroll -u https://" + node_name + ":" + node_name + "_PSW@localhost:7055 "
+                + "--enrollment.profile tls "
+                + "--csr.hosts " + node_name + " "
+                + "--mspdir $(pwd)/" + mainDirectory + "/organizations/" + org_directory + "tls "
+                + "--tls.certfiles $(pwd)/" + mainDirectory + "/fabric-ca-server-org1/tls/cert.pem");
+
+        // Rinominare i file TLS come richiesto da Fabric
+        executeWSLCommand("mv " + mainDirectory + "/organizations/" + org_directory + "tls/signcerts/cert.pem "
+                + mainDirectory + "/organizations/" + org_directory + "tls/server.crt");
+        executeWSLCommand("mv " + mainDirectory + "/organizations/" + org_directory + "tls/keystore/* "
+                + mainDirectory + "/organizations/" + org_directory + "tls/server.key");
+        executeWSLCommand("mv " + mainDirectory + "/organizations/" + org_directory + "tls/tlscacerts/* "
+                + mainDirectory + "/organizations/" + org_directory + "tls/ca.crt");
     }
+
     
     /**
      * metodo che aggiunge un peer nel file docjer-compose.yaml per poi poter essere avviato come container
@@ -1669,37 +1717,322 @@ public class Blockchain {
         }
     }
     
-    private static void createGenesisBlock(LinkedList<String> ordererEndpoints, LinkedList<String> consenters, LinkedList<String> profiles) throws FileNotFoundException, IOException{
+    private static void createGenesisBlock() throws FileNotFoundException, IOException{
         downloadBinForGenesisBlock();
         
+        String path=executeWSLCommandToString("echo $(pwd)");
+        Map<String, Object> profiles = new HashMap<>();
+
+        // ---------- Profilo OrdererGenesis ----------
+        Map<String, Object> ordererGenesis = new HashMap<>();
+
+        // Orderer section
+        Map<String, Object> ordererSection = new HashMap<>();
+        ordererSection.put("OrdererType", "etcdraft");
+        ordererSection.put("Organizations", Arrays.asList("OrdererOrg")); // usa alias *OrdererOrg
+        
+        
+        //Creazione ClientTLSCert e ServerTLSCert per i consenter
+        executeWSLCommand("cd "+mainDirectory+"/organizations/ordererOrganizations &&"
+                + "mkdir Consenters &&"
+                + "cd Consenters &&"
+                + "mkdir Host1 Host2 Host3 &&"
+                + "cd Host1 &&"
+                + "mkdir msp &&"
+                + "mkdir tls &&"
+                + "cd .. &&"
+                + "cd Host2 &&"
+                + "mkdir msp &&"
+                + "mkdir tls &&"
+                + "cd .. &&"
+                + "cd Host3 &&"
+                + "mkdir msp &&"
+                + "mkdir tls");
+        createLocalMsp("Consenters","Host1", false);
+        createLocalMsp("Consenters","Host2", false);
+        createLocalMsp("Consenters","Host3", false);
         //CONFIGURAZIONE CONFIGTX.YAML 
-        Yaml yaml = new Yaml();
         File file = new File(mainDirectory + "/bin/configtx.yaml");
         
+        Yaml yaml = new Yaml();
+        LoaderOptions options = new LoaderOptions();
+        options.setMaxAliasesForCollections(200); 
+        Yaml yamlWithOptions = new Yaml(options);
+
         Map<String,Object> data;
         try (InputStream inputStream = new FileInputStream(file)) {
-            data = yaml.load(inputStream);
-        }
+            data = yamlWithOptions.load(inputStream);
+}
+
         
-        ((Map<String,Object>) data.get("Organizations")).put("OrdererEndpoints", ordererEndpoints);
+        //Orderers
+        int port1=7079;
+        int port2=7080;
+        int port3=7081;
+        do{
+            port1++;
+            port2++;
+            port3++;
+        }while(ports_used.contains(port1) || ports_used.contains(port2) || ports_used.contains(port3));
+        List<Map<String, Object>> orgs = (List<Map<String, Object>>) data.get("Organizations");
+
+        // prendi la prima org (es. OrdererOrg)
+        Map<String, Object> ordererOrg = orgs.get(0);
+
+        // aggiungi o modifica OrdererEndpoints
+        List<String> ordererEndpoints = new ArrayList<>();
+        ordererEndpoints.add("Host1:" + port1);
+        ordererEndpoints.add("Host2:" + port2);
+        ordererEndpoints.add("Host3:" + port3);
+
+        ordererOrg.put("OrdererEndpoints", ordererEndpoints);
+
+
         
+        
+        //Consenters
         Map<String,Object> orderer=(Map<String,Object>) data.get("Orderer");
         orderer.put("OrdererType", "etcdraft");
         
+        List<Map<String,Object>> consenters = new ArrayList<>();
+
+        Map<String,Object> host1 = new HashMap<>();
+        host1.put("Host", "Host1");
+        host1.put("Port", port1);
+        host1.put("ClientTLSCert", path+"/"+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/Host1/tls/server.crt");
+        host1.put("ServerTLSCert", path+"/"+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/Host1/tls/server.crt");
+        
+
+        Map<String,Object> host2 = new HashMap<>();
+        host2.put("Host", "Host2");
+        host2.put("Port", port2);
+        host2.put("ClientTLSCert", path+"/"+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/Host2/tls/server.crt");
+        host2.put("ServerTLSCert", path+"/"+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/Host2/tls/server.crt");
+        
+
+        Map<String,Object> host3 = new HashMap<>();
+        host3.put("Host", "Host3");
+        host3.put("Port", port3);
+        host3.put("ClientTLSCert", path+"/"+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/Host3/tls/server.crt");
+        host3.put("ServerTLSCert", path+"/"+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/Host3/tls/server.crt");
+        
+        consenters.add(host1);
+        consenters.add(host2);
+        consenters.add(host3);
+
+        
+        
         ((Map<String,Object>) orderer.get("EtcdRaft")).put("Consenters", consenters);
+        
+        
+        // Consortiums
+        Map<String, Object> consortiums = new HashMap<>();
+        Map<String, Object> sampleConsortium = new HashMap<>();
+        // Creiamo un'organizzazione orderer "Host1MSP"
+        Map<String, Object> host1Org = new HashMap<>();
+        host1Org.put("Name", "Host1MSP");
+        host1Org.put("ID", "Host1MSP");
+        host1Org.put("MSPDir", path+"/"+mainDirectory + "/organizations/ordererOrganizations/Consenters/orderers/Host1/msp");
+
+        // policies base
+        Map<String, Object> host1Policies = new HashMap<>();
+        host1Policies.put("Readers", Map.of("Type", "Signature", "Rule", "OR('Host1MSP.member')"));
+        host1Policies.put("Writers", Map.of("Type", "Signature", "Rule", "OR('Host1MSP.member')"));
+        host1Policies.put("Admins", Map.of("Type", "Signature", "Rule", "OR('Host1MSP.admin')"));
+        host1Org.put("Policies", createOrgPolicies("Host1MSP"));
+
+        // Ripeti per Host2 e Host3
+        Map<String, Object> host2Org = new HashMap<>();
+        host2Org.put("Name", "Host2MSP");
+        host2Org.put("ID", "Host2MSP");
+        host2Org.put("MSPDir", path+"/"+mainDirectory + "/organizations/ordererOrganizations/Consenters/orderers/Host2/msp");
+        host2Org.put("Policies", createOrgPolicies("Host2MSP"));
+
+        Map<String, Object> host3Org = new HashMap<>();
+        host3Org.put("Name", "Host3MSP");
+        host3Org.put("ID", "Host3MSP");
+        host3Org.put("MSPDir", path+"/"+mainDirectory + "/organizations/ordererOrganizations/Consenters/orderers/Host3/msp");
+        host3Org.put("Policies", createOrgPolicies("Host3MSP"));
+
+        // Lista organizations (solo orderer per ora)
+        List<Map<String, Object>> ordererOrgs = new ArrayList<>();
+        ordererOrgs.add(host1Org);
+        ordererOrgs.add(host2Org);
+        ordererOrgs.add(host3Org);
+
+        // Sostituisci direttamente "Organizations" con la lista
+        orderer.put("Organizations", ordererOrgs);
+
+
+        consortiums.put("SampleConsortium", sampleConsortium);
+
+        
+        
+        
+        // ---------- Profilo ApplicationChannel ----------
+        Map<String, Object> applicationChannel = new HashMap<>();
+
+        applicationChannel.put("Consortium", "SampleConsortium");
+
+        Map<String, Object> applicationSection = new HashMap<>();
+        host1 = new HashMap<>();
+        host1.put("Name", "Host1MSP");
+        host1.put("ID", "Host1MSP");
+        host1.put("MSPDir", path+"/"+mainDirectory + "/organizations/ordererOrganizations/Consenters/orderers/Host1/msp");
+        host1.put("Policies", createOrgPolicies("Host1MSP")); // solo Policies
+
+        host2 = new HashMap<>();
+        host2.put("Name", "Host2MSP");
+        host2.put("ID", "Host2MSP");
+        host2.put("MSPDir", path+"/"+mainDirectory + "/organizations/ordererOrganizations/Consenters/orderers/Host2/msp");
+        host2.put("Policies", createOrgPolicies("Host2MSP"));
+
+        host3 = new HashMap<>();
+        host3.put("Name", "Host3MSP");
+        host3.put("ID", "Host3MSP");
+        host3.put("MSPDir", path+"/"+mainDirectory + "/organizations/ordererOrganizations/Consenters/orderers/Host3/msp");
+        host3.put("Policies", createOrgPolicies("Host3MSP"));
+
+        List<Map<String,Object>> appOrgs = Arrays.asList(host1, host2, host3);
+        applicationSection.put("Organizations", appOrgs);
+
+        applicationSection.put("Organizations", Arrays.asList(host1,host2,host3)); 
+        
+        
+        
+
+        ordererSection.put("Organizations", ordererOrgs);
+        
+        sampleConsortium = new HashMap<>();
+
+        // Inserisci le organizzazioni (per ora vuote)
+        sampleConsortium.put("Organizations", new ArrayList<>());
+
+
+        Map<String, Object> ordererGenesisConsortiums= new HashMap<>();
+
+        // Inserisci nel blocco Consortiums di OrdererGenesis
+        ordererGenesisConsortiums.put("SampleConsortium", sampleConsortium);
+
+        // Ora inserisci il tutto in OrdererGenesis
+        //ordererGenesis.put("Consortiums", ordererGenesisConsortiums);
+
+        // Assicurati di aver già popolato OrdererGenesis.Orderer con ordererSection
+        //ordererGenesis.put("Orderer", ordererSection);
+
+        // Infine inserisci OrdererGenesis nei profili
+        profiles.put("OrdererGenesis", ordererGenesis);
+        
+        // ---------- Inserisci nei profili ----------
+        Map<String, Object> etcdRaft = new HashMap<>();
+        etcdRaft.put("Consenters", consenters);
+        List<String> addresses = new ArrayList<>();
+        addresses.add("Host1:"+port1);
+        addresses.add("Host2:"+port2);
+        addresses.add("Host3:"+port3);
+        Map<String, Object> ordererGenesisOrderer = new HashMap<>();
+        
+        // Inserisci nelle Policies dell'Orderer
+        ordererGenesisOrderer.put("Policies", createOrdererPolicies(true)); 
+        ordererGenesisOrderer.put("OrdererType", "etcdraft");
+        ordererGenesisOrderer.put("Addresses", addresses);
+        ordererGenesisOrderer.put("EtcdRaft", etcdRaft);
+        ordererGenesisOrderer.put("Organizations", data.get("Orderer") != null ? ((Map<String,Object>) data.get("Orderer")).get("Organizations") : new ArrayList<>());
+        
+        Map<String, Object> appPolicies = new HashMap<>();
+        appPolicies.put("Readers", createOrdererPolicies(false).get("Readers"));
+        appPolicies.put("Writers", createOrdererPolicies(false).get("Writers"));
+        appPolicies.put("Admins", createOrdererPolicies(false).get("Admins"));
+
+        applicationSection.put("Policies", appPolicies);
+        applicationChannel.put("Application", applicationSection);
+
+        
+        profiles.put("ApplicationChannel", applicationChannel);
+        // Assembla OrdererGenesis
+        ordererGenesis.put("Policies", createOrdererPolicies(false));
+        ordererGenesis.put("Consortiums", ordererGenesisConsortiums);
+        ordererGenesis.put("Orderer", ordererGenesisOrderer);
+        
+        
+        // Infine: inserisci "Profiles" nella root del tuo data
+        data.put("Profiles", profiles);
+        
+        //Writing
+        DumperOptions op = new DumperOptions();
+        op.setIndent(2);
+        op.setPrettyFlow(true);
+        op.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+        Yaml yamlWriter = new Yaml(op);
+
+        try (FileWriter writer = new FileWriter(file)) {
+            yamlWriter.dump(data, writer);
+        }
+        System.out.println("Config updated");
         
         //CREAZIONE DEL GENESIS BLOCK
         
-        executeWSLCommand("cp $(pwd)/"+mainDirectory+"/bin"
-                + "configtxgen -profile SampleAppGenesisEtcdRaft -outputBlock genesis_block.pb -channelID channel1");
+        executeWSLCommand("cd $(pwd)/"+mainDirectory+"/bin &&"
+                + "./configtxgen -profile OrdererGenesis -channelID system-channel -outputBlock ./genesis_block.pb");
+    }
+    
+    private static Map<String,Object> createOrdererPolicies(boolean blockValidation){
+        Map<String,Object> policies = new HashMap<>();
+
+        Map<String,Object> readers = new HashMap<>();
+        readers.put("Type", "ImplicitMeta");
+        readers.put("Rule", "ANY Readers");
+
+        Map<String,Object> writers = new HashMap<>();
+        writers.put("Type", "ImplicitMeta");
+        writers.put("Rule", "ANY Writers");
+
+        Map<String,Object> admins = new HashMap<>();
+        admins.put("Type", "ImplicitMeta");
+        admins.put("Rule", "MAJORITY Admins");
+
+        policies.put("Readers", readers);
+        policies.put("Writers", writers);
+        policies.put("Admins", admins);
+        
+        if(blockValidation){
+            Map<String,Object> blkVal= new HashMap<>();
+            blkVal.put("Type", "ImplicitMeta");
+            blkVal.put("Rule", "ANY Writers");
+            
+            policies.put("BlockValidation", blkVal);
+        }
+        
+        return policies;
+    }
+    private static Map<String,Object> createOrgPolicies(String mspId) {
+        Map<String,Object> policies = new HashMap<>();
+
+        Map<String,Object> readers = new HashMap<>();
+        readers.put("Type", "Signature");
+        readers.put("Rule", "OR('" + mspId + ".member')");
+
+        Map<String,Object> writers = new HashMap<>();
+        writers.put("Type", "Signature");
+        writers.put("Rule", "OR('" + mspId + ".member')");
+
+        Map<String,Object> admins = new HashMap<>();
+        admins.put("Type", "Signature");
+        admins.put("Rule", "OR('" + mspId + ".admin')");
+
+        policies.put("Readers", readers);
+        policies.put("Writers", writers);
+        policies.put("Admins", admins);
+
+        return policies;
     }
     
     /**
      * This method is used to install all the binaries needed for the creation of the genesis block
      */
     private static void downloadBinForGenesisBlock(){
-        executeWSLCommand("cp $(pwd)/"+mainDirectory+"/bin"
-                + "curl -L https://github.com/hyperledger/fabric/releases/download/v2.5.0/hyperledger-fabric-linux-amd64-2.5.0.tar.gz -o fabric-bin.tar.gz"
+        executeWSLCommand("cd $(pwd)/"+mainDirectory+"/bin &&"
+                + "curl -L https://github.com/hyperledger/fabric/releases/download/v2.5.0/hyperledger-fabric-linux-amd64-2.5.0.tar.gz -o fabric-bin.tar.gz &&"
                 + "tar -xvzf fabric-bin.tar.gz --strip-components=1");
     }
     
