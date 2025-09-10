@@ -79,6 +79,8 @@ public class Blockchain {
         
     }
     
+    
+    
     private static void createDirectory(String name){
         executeWSLCommand("mkdir "+name);
     }
@@ -643,68 +645,7 @@ public class Blockchain {
     }
     
     
-    private static void insertNewIdentities() throws IOException{
-        Scanner in= new Scanner(System.in);
-        System.out.println("How many organizations?");
-        int numOrgs=in.nextInt();
-        
-        System.out.println("How many peers per organization?");
-        int peersPerOrg=in.nextInt();
-        
-        System.out.println("How many orderers?");
-        int numOrderer=in.nextInt();
-        
-        Map<String, Object> dockerCompose = new LinkedHashMap<>();
-
-        // Setup iniziale
-        dockerCompose.put("version", "2");
-        Map<String, Object> services = new LinkedHashMap<>();
-        
-        // Aggiungi i peer
-        int peerPort = 7051;
-        for (int org = 1; org <= numOrgs; org++) {
-            for (int peer = 0; peer < peersPerOrg; peer++) {
-                String peerName = "peer" + peer + ".org" + org + ".example.com";
-                Map<String, Object> peerConfig = new LinkedHashMap<>();
-                peerConfig.put("image", "hyperledger/fabric-peer:latest");
-                peerConfig.put("ports", List.of(peerPort + ":7051"));
-                peerConfig.put("networks", List.of("fabric_network"));
-                services.put(peerName, peerConfig);
-                boolean k=true;
-                while(k){
-                    peerPort += 1000;
-                    if(!ports_used.contains(peerPort)){
-                        k=false;
-                    }
-                }
-                peerPort += 1000; // es: 7051, 8051, 9051, ecc.
-            }
-        }
-
-        // Aggiungi orderer
-        for (int i = 0; i < numOrderer; i++) {
-            String ordererName = "orderer" + i + ".example.com";
-            Map<String, Object> ordererConfig = new LinkedHashMap<>();
-            ordererConfig.put("image", "hyperledger/fabric-orderer:latest");
-            ordererConfig.put("ports", List.of((7050 + i) + ":7050"));
-            ordererConfig.put("networks", List.of("fabric_network"));
-            services.put(ordererName, ordererConfig);
-        }
-
-        // Metti tutti i servizi nella sezione "services"
-        dockerCompose.put("services", services);
-
-        // Definisci la rete
-        dockerCompose.put("networks", Map.of("fabric_network", new LinkedHashMap<>()));
-
-        // Scrivi il file YAML
-        Yaml yaml = new Yaml();
-        FileWriter writer = new FileWriter("docker-compose.yaml");
-        yaml.dump(dockerCompose, writer);
-        writer.close();
-
-        System.out.println("docker-compose.yaml created!");
-    }
+    
     
     
     
@@ -755,7 +696,14 @@ public class Blockchain {
                     for(int i=0;i<num_orderer;i++){
                         createLocalMsp(organization_name,orderers_names.get(i),false);
                         download_orderer_bin(orderers_names.get(i));
-                        configure_orderer(orderers_names.get(i),organization_name, num_orderer>1);
+                        int port= configure_orderer(orderers_names.get(i),organization_name, num_orderer>1);
+                        executeWSLCommand("cd "+mainDirectory+" &&"
+                                + "mv fabric-ca-client/tls-ca/tlsadmin/msp/keystore/*_sk fabric-ca-client/tls-ca/tlsadmin/msp/keystore/key.pem");
+                        //Comando per aggungere l'orderer al canale
+                        executeWSLCommand("export OSN_TLS_CA_ROOT_CERT="+mainDirectory+"/organizations/ordererOrganizations/"+organization_name+"/orderers/"+orderers_names.get(i)+"/tls/tls-ca-cert.pem &&"
+                                        + "export ADMIN_TLS_SIGN_CERT="+mainDirectory+"/fabric-ca-client/tls-ca/tlsadmin/msp/signcerts/cert.pem &&"
+                                        + "export ADMIN_TLS_PRIVATE_KEY="+mainDirectory+"/fabric-ca-client/tls-ca/tlsadmin/msp/key.pem &&"
+                                        + "./osnadmin channel join --channelID channel1 --config-block "+mainDirectory+"/bin/genesis_block.pb -o 0.0.0.0:"+port+" --ca-file $OSN_TLS_CA_ROOT_CERT --client-cert $ADMIN_TLS_SIGN_CERT --client-key $ADMIN_TLS_PRIVATE_KEY");
                     }
                     break;
                 }
@@ -1208,7 +1156,7 @@ public class Blockchain {
     }
     
     
-    public static void configure_orderer(String orderer_name, String org_name, boolean needClusterConfig) throws FileNotFoundException, IOException{
+    public static int configure_orderer(String orderer_name, String org_name, boolean needClusterConfig) throws FileNotFoundException, IOException{
         Scanner in= new Scanner(System.in);
         System.out.println("------------ ORDERER "+orderer_name+"."+org_name+" CONFIGURATION ------------");
         File orderer_config=new File(""+ mainDirectory +"/orderers_bin/"+orderer_name+"/config/orderer.yaml");
@@ -1232,16 +1180,17 @@ public class Blockchain {
         //TLS
         Map<String, Object> general_tls=(Map<String,Object>)general.get("TLS");
         general_tls.put("Enabled", true);
-        general_tls.put("PrivateKey", "/etc/hyperledger/fabric/tls/key");
+        general_tls.put("PrivateKey", "/etc/hyperledger/fabric/tls/server.key");
 
-        general_tls.put("Certificate", "/etc/hyperledger/fabric/tls/cert.pem"); 
+        general_tls.put("Certificate", "/etc/hyperledger/fabric/tls/server.crt"); 
+        general_tls.put("RootCAs", "/etc/hyperledger/fabric/tls/ca.crt");
 
         System.out.println("Enable mutual TLS?(y/n)");
         if(in.next().equals("y")){
             general_tls.put("ClientAuthRequired", true);
             List<String> clientRootCAs = new ArrayList<>();
-
-
+            //Copiamo il certificato della root nel percorso dell'orderer
+            executeWSLCommand("cp "+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "+mainDirectory+"/organizations/ordererOrganizations/ordererOrg/orderers/o1.ordererOrg/tls/");
             clientRootCAs.add("/etc/hyperledger/fabric/tls/tls-ca-cert.pem");
 
             general_tls.put("ClientRootCAs", clientRootCAs);
@@ -1278,6 +1227,8 @@ public class Blockchain {
                 System.out.println("Using default listener and TLS credentials for cluster communication.");
                 // If user doesn’t enable separate listener, no need to set extra fields
             }
+        }else{
+            general.remove("Cluster");
         }
         
 
@@ -1294,7 +1245,7 @@ public class Blockchain {
          }*/
         
         //LOCAL MSP DIR
-        general.put("LocalMSPDir", "$(pwd)/"+mainDirectory+"/organizations/ordererOrganizations/"+org_name+"/orderers/"+orderer_name+"/msp");
+        general.put("LocalMSPDir", "/etc/hyperledger/fabric/msp");
         //LOCAL MSP ID
         general.put("LocalMSPID","SampleOrg");
         // BCCSP
@@ -1307,9 +1258,12 @@ public class Blockchain {
         Map<String, Object> sw = new HashMap<>();
         sw.put("Hash", "SHA2");
         sw.put("Security", 256);
-
+        
+        //creazione di una cartella in cui salvare le chiavi private generate per MSPo TLS
+        executeWSLCommand("cd "+mainDirectory+"/organizations/ordererOrganizations/"+ org_name + "/orderers/" + orderer_name+" &&"
+                + "mkdir keys");
         Map<String, Object> fileKeyStore = new HashMap<>();
-        fileKeyStore.put("KeyStore", "$(pwd)/" + mainDirectory + "/organizations/ordererOrganizations/" + org_name + "/orderers/" + orderer_name + "/msp/keystore");
+        fileKeyStore.put("KeyStore", "/etc/hyperledger/fabric/keys");
         sw.put("FileKeyStore", fileKeyStore);
 
         general_bccsp.put("SW", sw);
@@ -1350,9 +1304,13 @@ public class Blockchain {
         }*/
 
         //FILE LEDGER
+        //andiamo a creare una cartella dove verranno salvati i blocchi e lo stato del ledger
+        executeWSLCommand("cd "+mainDirectory+"/organizations/ordererOrganizations/"+ org_name + "/orderers/" + orderer_name+"&&"
+                + "mkdir ledger"); 
+        
         Map<String, Object> fileLedger = (Map<String, Object>) data.get("FileLedger");
-        String ledgerPath = "$(pwd)/" + mainDirectory + "/organizations/ordererOrganizations/" + org_name + "/orderers/" + orderer_name + "/fileLedger";
-        fileLedger.put("Location", ledgerPath);
+        String ledger = "/var/hyperledger/production/orderer";
+        fileLedger.put("Location", ledger);
         
         //OPERATIONS
         System.out.println("Do you want to use the operations service?(y/n)");
@@ -1396,8 +1354,8 @@ public class Blockchain {
         Map<String, Object> admin =(Map<String, Object>) data.get("Admin");
         Map<String, Object> admin_TLS=(Map<String, Object>) admin.get("TLS");
         admin_TLS.put("Enabled", true);
-        admin_TLS.put("Certificate", "$(pwd)/"+mainDirectory+"/organizations/ordererOrganizations/"+org_name+"/orderers/"+orderer_name+"/msp/keystore/"); //TODO Scrivere nome del certificato
-        admin_TLS.put("PrivateKey", "$(pwd)/"+mainDirectory+"/organizations/ordererOrganizations/"+org_name+"/orderers/"+orderer_name+"/msp/keystore/server.key");
+        admin_TLS.put("Certificate", "/etc/hyperledger/fabric/tls/server.crt"); 
+        admin_TLS.put("PrivateKey", "/etc/hyperledger/fabric/tls/server.key");
         admin_TLS.put("ClientAuthRequired", true);
         List<String> clientRootCAs = new ArrayList<>();
 
@@ -1433,15 +1391,19 @@ public class Blockchain {
         String mspPath=path+"/"+mainDirectory+"/organizations/ordererOrganizations/"+org_name+"/orderers/"+orderer_name+"/msp";
         String cfgPath=path+"/"+mainDirectory+"/orderers_bin/"+orderer_name+"/config";
         String tlsPath=path+"/"+mainDirectory+"/organizations/ordererOrganizations/"+org_name+"/orderers/"+orderer_name+"/tls";
+        String ledgerPath=path+"/"+mainDirectory+"/organizations/ordererOrganizations/"+org_name+"/orderers/"+orderer_name+"/ledger";
+        String keysPath=path+"/"+mainDirectory+"/organizations/ordererOrganizations/"+org_name+"/orderers/"+orderer_name+"/keys";
         LinkedList<Integer> ports= new LinkedList<Integer>();
         ports.add(port);
-        add_orderer_to_docker(orderer_name,cfgPath,mspPath,tlsPath,"SampleOrg",ports);
+        add_orderer_to_docker(orderer_name,cfgPath,mspPath,tlsPath,ledgerPath,keysPath,ports);
         
         //Avvio del container
         new ordererThread();
         
         //Aspetto che il container si avvi
         waitForContainer(orderer_name);
+        
+        return port;
     }
     
     
@@ -1615,10 +1577,9 @@ public class Blockchain {
     
 
        
-    private static void add_orderer_to_docker(String ordererName, String cfgPath, String mspPath, String tlsPath, String mspId, LinkedList<Integer> ports)throws IOException{
+    private static void add_orderer_to_docker(String ordererName, String cfgPath, String mspPath, String tlsPath, String ledgerPath, String keysPath, LinkedList<Integer> ports)throws IOException{
         Yaml yaml = new Yaml();
         File file = new File(mainDirectory + "/docker-compose.yaml");
-
         Map<String, Object> data;
         try (InputStream inputStream = new FileInputStream(file)) {
             data = yaml.load(inputStream);
@@ -1635,15 +1596,20 @@ public class Blockchain {
         ordererConfig.put("image", "hyperledger/fabric-orderer");
 
         List<String> env = new ArrayList<>();
-        env.add("FABRIC_CFG_PATH=" + "/etc/hyperledger/fabric/tls");
+        env.add("FABRIC_CFG_PATH=" + "/etc/hyperledger/fabric/config");
         env.add("ORDERER_GENERAL_LOCALMSPDIR=" + "/etc/hyperledger/fabric/msp");
         env.add("ORDERER_GENERAL_LOCALMSPID=" + "SampleOrg");
+        env.add("ORDERER_GENERAL_BOOTSTRAPMETHOD=file");
+        env.add("ORDERER_GENERAL_BOOTSTRAPFILE=/etc/hyperledger/fabric/config/genesis_block.pb");
         ordererConfig.put("environment", env);
-
+        
+        executeWSLCommand("cp "+mainDirectory+"/bin/genesis_block.pb "+cfgPath);
         List<String> volumes = new ArrayList<>();
         volumes.add(cfgPath + ":/etc/hyperledger/fabric/config");
         volumes.add(mspPath + ":/etc/hyperledger/fabric/msp");
         volumes.add(tlsPath + ":/etc/hyperledger/fabric/tls");
+        volumes.add(ledgerPath+":/var/hyperledger/production/orderer");
+        volumes.add(keysPath+":/etc/hyperledger/fabric/keys");
         ordererConfig.put("volumes", volumes);
 
         ordererConfig.put("ports", ports);
@@ -1662,7 +1628,13 @@ public class Blockchain {
     }
     
     private static void createGenesisBlock() throws FileNotFoundException, IOException{
+        
         downloadBinForGenesisBlock();
+        while(!executeWSLCommandToString("ls "+mainDirectory+"/bin").contains("configtx.yaml")){
+            System.out.println("Download of binaries failed, retrying...");
+            downloadBinForGenesisBlock();
+        }
+        
         
         String path=executeWSLCommandToString("echo $(pwd)");
         Map<String, Object> profiles = new HashMap<>();

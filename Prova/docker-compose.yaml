@@ -2,7 +2,7 @@ version: '3'
 services:
   ca_server:
     image: hyperledger/fabric-ca:1.5.15
-    container_name: tls
+    container_name: tls-ca
     ports:
     - 7054:7054
     environment:
@@ -17,10 +17,10 @@ services:
     command: sh -c 'fabric-ca-server start -badmin:adminPsw -d'
   fabric-ca-server-org1:
     image: hyperledger/fabric-ca:1.5.15
-    container_name: org
+    container_name: org-ca
     environment:
     - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
-    - FABRIC_CA_SERVER_CA_NAME=org
+    - FABRIC_CA_SERVER_CA_NAME=org-ca
     - FABRIC_CA_SERVER_TLS_ENABLED=true
     - FABRIC_CA_SERVER_TLS_CERTFILE=/etc/hyperledger/fabric-ca-server/tls/cert.pem
     - FABRIC_CA_SERVER_TLS_KEYFILE=/etc/hyperledger/fabric-ca-server/tls/ORG1_PRIVATE_KEY
@@ -30,18 +30,21 @@ services:
     volumes:
     - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/fabric-ca-server-org1:/etc/hyperledger/fabric-ca-server
     - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/fabric-ca-server-org1/fabric-ca-server-config.yaml:/etc/hyperledger/fabric-ca-server/fabric-ca-server-config.yaml
-  fabric-ca-server-int-ca:
-    image: hyperledger/fabric-ca:1.5.15
-    container_name: int
+  o1.ordererOrg:
+    container_name: o1.ordererOrg
+    image: hyperledger/fabric-orderer
     environment:
-    - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
-    - FABRIC_CA_SERVER_CA_NAME=int
-    - FABRIC_CA_SERVER_TLS_ENABLED=true
-    - FABRIC_CA_SERVER_TLS_CERTFILE=/etc/hyperledger/fabric-ca-server/tls/cert.pem
-    - FABRIC_CA_SERVER_TLS_KEYFILE=/etc/hyperledger/fabric-ca-server/tls/CA_PRIVATE_KEY
-    ports:
-    - 7056:7056
-    command: sh -c 'fabric-ca-server start -b admin:adminPsw -d'
+    - FABRIC_CFG_PATH=/etc/hyperledger/fabric/config
+    - ORDERER_GENERAL_LOCALMSPDIR=/etc/hyperledger/fabric/msp
+    - ORDERER_GENERAL_LOCALMSPID=SampleOrg
+    - ORDERER_GENERAL_BOOTSTRAPMETHOD=file
+    - ORDERER_GENERAL_BOOTSTRAPFILE=/etc/hyperledger/fabric/config/genesis_block.pb
     volumes:
-    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/fabric-ca-server-int-ca:/etc/hyperledger/fabric-ca-server
-    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/fabric-ca-server-int-ca/fabric-ca-server-config.yaml:/etc/hyperledger/fabric-ca-server/fabric-ca-server-config.yaml
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/orderers_bin/o1.ordererOrg/config:/etc/hyperledger/fabric/config
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/ordererOrg/orderers/o1.ordererOrg/msp:/etc/hyperledger/fabric/msp
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/ordererOrg/orderers/o1.ordererOrg/tls:/etc/hyperledger/fabric/tls
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/ordererOrg/orderers/o1.ordererOrg/ledger:/var/hyperledger/production/orderer
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/ordererOrg/orderers/o1.ordererOrg/keys:/etc/hyperledger/fabric/keys
+    ports:
+    - 7050
+    command: orderer
