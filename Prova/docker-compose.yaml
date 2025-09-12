@@ -30,8 +30,8 @@ services:
     volumes:
     - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/fabric-ca-server-org1:/etc/hyperledger/fabric-ca-server
     - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/fabric-ca-server-org1/fabric-ca-server-config.yaml:/etc/hyperledger/fabric-ca-server/fabric-ca-server-config.yaml
-  o1.ordererOrg:
-    container_name: o1.ordererOrg
+  Host1:
+    container_name: Host1
     image: hyperledger/fabric-orderer
     environment:
     - FABRIC_CFG_PATH=/etc/hyperledger/fabric/config
@@ -40,11 +40,47 @@ services:
     - ORDERER_GENERAL_BOOTSTRAPMETHOD=file
     - ORDERER_GENERAL_BOOTSTRAPFILE=/etc/hyperledger/fabric/config/genesis_block.pb
     volumes:
-    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/orderers_bin/o1.ordererOrg/config:/etc/hyperledger/fabric/config
-    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/ordererOrg/orderers/o1.ordererOrg/msp:/etc/hyperledger/fabric/msp
-    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/ordererOrg/orderers/o1.ordererOrg/tls:/etc/hyperledger/fabric/tls
-    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/ordererOrg/orderers/o1.ordererOrg/ledger:/var/hyperledger/production/orderer
-    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/ordererOrg/orderers/o1.ordererOrg/keys:/etc/hyperledger/fabric/keys
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/orderers_bin/Host1/config:/etc/hyperledger/fabric/config
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/Host1/msp:/etc/hyperledger/fabric/msp
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/Host1/tls:/etc/hyperledger/fabric/tls
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/Host1/ledger:/var/hyperledger/production/orderer
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/Host1/keys:/etc/hyperledger/fabric/keys
     ports:
-    - 7050
+    - 7080
+    command: orderer
+  Host2:
+    container_name: Host2
+    image: hyperledger/fabric-orderer
+    environment:
+    - FABRIC_CFG_PATH=/etc/hyperledger/fabric/config
+    - ORDERER_GENERAL_LOCALMSPDIR=/etc/hyperledger/fabric/msp
+    - ORDERER_GENERAL_LOCALMSPID=SampleOrg
+    - ORDERER_GENERAL_BOOTSTRAPMETHOD=file
+    - ORDERER_GENERAL_BOOTSTRAPFILE=/etc/hyperledger/fabric/config/genesis_block.pb
+    volumes:
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/orderers_bin/Host2/config:/etc/hyperledger/fabric/config
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/Host2/msp:/etc/hyperledger/fabric/msp
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/Host2/tls:/etc/hyperledger/fabric/tls
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/Host2/ledger:/var/hyperledger/production/orderer
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/Host2/keys:/etc/hyperledger/fabric/keys
+    ports:
+    - 7081
+    command: orderer
+  Host3:
+    container_name: Host3
+    image: hyperledger/fabric-orderer
+    environment:
+    - FABRIC_CFG_PATH=/etc/hyperledger/fabric/config
+    - ORDERER_GENERAL_LOCALMSPDIR=/etc/hyperledger/fabric/msp
+    - ORDERER_GENERAL_LOCALMSPID=SampleOrg
+    - ORDERER_GENERAL_BOOTSTRAPMETHOD=file
+    - ORDERER_GENERAL_BOOTSTRAPFILE=/etc/hyperledger/fabric/config/genesis_block.pb
+    volumes:
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/orderers_bin/Host3/config:/etc/hyperledger/fabric/config
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/Host3/msp:/etc/hyperledger/fabric/msp
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/Host3/tls:/etc/hyperledger/fabric/tls
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/Host3/ledger:/var/hyperledger/production/orderer
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/Host3/keys:/etc/hyperledger/fabric/keys
+    ports:
+    - 7082
     command: orderer

@@ -72,6 +72,10 @@ public class Blockchain {
         createDirectory(mainDirectory);
         setupCA(yourPin);
         
+        executeWSLCommand("cd "+mainDirectory+" &&"
+                + "mkdir peers_bin");
+        executeWSLCommand("cd "+mainDirectory+" &&"
+                + "mkdir orderers_bin");
         
         createGenesisBlock();
         //metodo per creare il sistema di cartelle delle organizzazioni
@@ -659,10 +663,7 @@ public class Blockchain {
                 + "cd organizations &&"
                 + "mkdir fabric-ca ordererOrganizations peerOrganizations");
         boolean k=true;
-        executeWSLCommand("cd "+mainDirectory+" &&"
-                + "mkdir peers_bin");
-        executeWSLCommand("cd "+mainDirectory+" &&"
-                + "mkdir orderers_bin");
+        
         do{
             System.out.println("-------- ORGANIZATIONS MENU --------");
             System.out.println("1) Add orderer organization");
@@ -699,10 +700,12 @@ public class Blockchain {
                         int port= configure_orderer(orderers_names.get(i),organization_name, num_orderer>1);
                         executeWSLCommand("cd "+mainDirectory+" &&"
                                 + "mv fabric-ca-client/tls-ca/tlsadmin/msp/keystore/*_sk fabric-ca-client/tls-ca/tlsadmin/msp/keystore/key.pem");
+                        
                         //Comando per aggungere l'orderer al canale
                         executeWSLCommand("export OSN_TLS_CA_ROOT_CERT="+mainDirectory+"/organizations/ordererOrganizations/"+organization_name+"/orderers/"+orderers_names.get(i)+"/tls/tls-ca-cert.pem &&"
                                         + "export ADMIN_TLS_SIGN_CERT="+mainDirectory+"/fabric-ca-client/tls-ca/tlsadmin/msp/signcerts/cert.pem &&"
                                         + "export ADMIN_TLS_PRIVATE_KEY="+mainDirectory+"/fabric-ca-client/tls-ca/tlsadmin/msp/key.pem &&"
+                                        + " cd "+mainDirectory+"/bin &&"
                                         + "./osnadmin channel join --channelID channel1 --config-block "+mainDirectory+"/bin/genesis_block.pb -o 0.0.0.0:"+port+" --ca-file $OSN_TLS_CA_ROOT_CERT --client-cert $ADMIN_TLS_SIGN_CERT --client-key $ADMIN_TLS_PRIVATE_KEY");
                     }
                     break;
@@ -1184,17 +1187,27 @@ public class Blockchain {
 
         general_tls.put("Certificate", "/etc/hyperledger/fabric/tls/server.crt"); 
         general_tls.put("RootCAs", "/etc/hyperledger/fabric/tls/ca.crt");
-
-        System.out.println("Enable mutual TLS?(y/n)");
-        if(in.next().equals("y")){
+        if(org_name.equals("Consenters")){
             general_tls.put("ClientAuthRequired", true);
             List<String> clientRootCAs = new ArrayList<>();
             //Copiamo il certificato della root nel percorso dell'orderer
-            executeWSLCommand("cp "+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "+mainDirectory+"/organizations/ordererOrganizations/ordererOrg/orderers/o1.ordererOrg/tls/");
+            executeWSLCommand("cp "+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "+mainDirectory+"/organizations/ordererOrganizations/"+org_name+"/orderers/"+orderer_name+"/tls/");
             clientRootCAs.add("/etc/hyperledger/fabric/tls/tls-ca-cert.pem");
 
             general_tls.put("ClientRootCAs", clientRootCAs);
+        }else{
+            System.out.println("Enable mutual TLS?(y/n)");
+            if(in.next().equals("y")){
+                general_tls.put("ClientAuthRequired", true);
+                List<String> clientRootCAs = new ArrayList<>();
+                //Copiamo il certificato della root nel percorso dell'orderer
+                executeWSLCommand("cp "+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "+mainDirectory+"/organizations/ordererOrganizations/"+org_name+"/orderers/"+orderer_name+"/tls/");
+                clientRootCAs.add("/etc/hyperledger/fabric/tls/tls-ca-cert.pem");
+
+                general_tls.put("ClientRootCAs", clientRootCAs);
+            }
         }
+        
         
         
         // CLUSTER
@@ -1202,31 +1215,37 @@ public class Blockchain {
             Map<String, Object> general_cluster = (Map<String, Object>) general.get("Cluster");
 
             general_cluster.put("SendBufferSize", 100);
-
-            System.out.println("Use a separate listener for intra-cluster communication? (y/n)");
-            if (in.next().equals("y")) {
-
-                
-                general_cluster.put("ListenAddress", "0.0.0.0");
-
-                
-                general_cluster.put("ListenPort", 7049);
-
-                String certPath = "$(pwd)/" + mainDirectory + "/organizations/ordererOrganizations/" + org_name + "/orderers/" + orderer_name + "/tls/server.crt";
-                String keyPath = "$(pwd)/" + mainDirectory + "/organizations/ordererOrganizations/" + org_name + "/orderers/" + orderer_name + "/tls/server.key";
-
-                general_cluster.put("ServerCertificate", certPath);
-                general_cluster.put("ServerPrivateKey", keyPath);
-
-                // Set client cert and key (could be reused or different)
-                general_cluster.put("ClientCertificate", certPath);
-                general_cluster.put("ClientPrivateKey", keyPath);
-
-                System.out.println("Separate cluster listener has been enabled with mutual TLS.");
-            } else {
+            
+            if(org_name.equals("Consenters")){
                 System.out.println("Using default listener and TLS credentials for cluster communication.");
                 // If user doesn’t enable separate listener, no need to set extra fields
+            }else{
+                System.out.println("Use a separate listener for intra-cluster communication? (y/n)");
+                if (in.next().equals("y")) {
+
+
+                    general_cluster.put("ListenAddress", "0.0.0.0");
+
+
+                    general_cluster.put("ListenPort", 7049);
+
+                    String certPath = "$(pwd)/" + mainDirectory + "/organizations/ordererOrganizations/" + org_name + "/orderers/" + orderer_name + "/tls/server.crt";
+                    String keyPath = "$(pwd)/" + mainDirectory + "/organizations/ordererOrganizations/" + org_name + "/orderers/" + orderer_name + "/tls/server.key";
+
+                    general_cluster.put("ServerCertificate", certPath);
+                    general_cluster.put("ServerPrivateKey", keyPath);
+
+                    // Set client cert and key (could be reused or different)
+                    general_cluster.put("ClientCertificate", certPath);
+                    general_cluster.put("ClientPrivateKey", keyPath);
+
+                    System.out.println("Separate cluster listener has been enabled with mutual TLS.");
+                } else {
+                    System.out.println("Using default listener and TLS credentials for cluster communication.");
+                    // If user doesn’t enable separate listener, no need to set extra fields
+                }
             }
+            
         }else{
             general.remove("Cluster");
         }
@@ -1313,30 +1332,35 @@ public class Blockchain {
         fileLedger.put("Location", ledger);
         
         //OPERATIONS
-        System.out.println("Do you want to use the operations service?(y/n)");
-        if (in.next().equals("y")) {
-            Map<String, Object> operations =(Map<String, Object>) data.get("Operations");
-            String op_server_add="0.0.0.0";
-            port=9443;
-            do{
-                port++;
-            }while(ports_used.contains(port));
-            operations.put("ListenAddress", op_server_add+":"+port);
-            
-            operations.put("Certificate","/etc/hyperledger/fabric/tls/cert.pem"); 
-            operations.put("PrivateKey","/etc/hyperledger/fabric/tls/key");
-            
-            System.out.println("Enable mutal TLS between client and server?(y/n)");
+        if(org_name.equals("Consenters")){
+            System.out.println("Using default settings");
+        }else{
+            System.out.println("Do you want to use the operations service?(y/n)");
             if (in.next().equals("y")) {
-                operations.put("ClientAuthRequired", true);
-                List<String> clientRootCAs = new ArrayList<>();
-                
-                
-                clientRootCAs.add("/etc/hyperledger/fabric/tls/tls-ca-cert.pem");
+                Map<String, Object> operations =(Map<String, Object>) data.get("Operations");
+                String op_server_add="0.0.0.0";
+                port=9443;
+                do{
+                    port++;
+                }while(ports_used.contains(port));
+                operations.put("ListenAddress", op_server_add+":"+port);
 
-                operations.put("ClientRootCAs", clientRootCAs);
+                operations.put("Certificate","/etc/hyperledger/fabric/tls/cert.pem"); 
+                operations.put("PrivateKey","/etc/hyperledger/fabric/tls/key");
+
+                System.out.println("Enable mutal TLS between client and server?(y/n)");
+                if (in.next().equals("y")) {
+                    operations.put("ClientAuthRequired", true);
+                    List<String> clientRootCAs = new ArrayList<>();
+
+
+                    clientRootCAs.add("/etc/hyperledger/fabric/tls/tls-ca-cert.pem");
+
+                    operations.put("ClientRootCAs", clientRootCAs);
+                }
             }
         }
+        
         
         
         //METRICS
@@ -1365,9 +1389,15 @@ public class Blockchain {
         admin_TLS.put("ClientRootCAs", clientRootCAs);
         //CHANNEL PARTECIPATION
         Map<String, Object> channelParticipation = (Map<String, Object>) data.get("ChannelParticipation");
-        System.out.println("Enable Channel Participation API? (y/n)");
-        String enableInput = in.next().toLowerCase();
-        boolean enabled = enableInput.equals("y");
+        boolean enabled = false;
+        if(org_name.equals("Consenters")){
+            enabled=false;
+        }else{
+           System.out.println("Enable Channel Participation API? (y/n)");
+            String enableInput = in.next().toLowerCase();
+            enabled = enableInput.equals("y"); 
+        }
+        
         channelParticipation.put("Enabled", enabled);
         channelParticipation.put("MaxRequestBodySize", "1 MB");
         //CONSENSUS
@@ -1385,6 +1415,10 @@ public class Blockchain {
         try (FileWriter writer = new FileWriter(orderer_config)) {
             yamlWriter.dump(data, writer);
         }
+        
+        if(orderer_name.equals("Host1") || orderer_name.equals("Host2") || orderer_name.equals("Host3")){
+            return 0;
+        }
         System.out.println("Config updated");
         //Aggiunta dell'orderer al file docker-compose.yaml
         String path=executeWSLCommandToString("echo $(pwd)");
@@ -1397,6 +1431,9 @@ public class Blockchain {
         ports.add(port);
         add_orderer_to_docker(orderer_name,cfgPath,mspPath,tlsPath,ledgerPath,keysPath,ports);
         
+        
+        //Copia del certificato dell'admin in admincerts
+        executeWSLCommand("cp "+mainDirectory+"/organizations/ordererOrganizations/"+org_name+"/orderers/"+orderer_name+"/msp/signcerts/cert.pem "+mainDirectory+"/ordererOrganizations/"+org_name+"/orderers/"+orderer_name+"/msp/admincerts/");
         //Avvio del container
         new ordererThread();
         
@@ -1428,12 +1465,12 @@ public class Blockchain {
     }
     
     private static void organizationAdminRegistrationEnroll(String org_name, boolean peer_org){
-        System.out.println("---------- ORGANIZATION ADMIN REGISTRATION ----------");
-        Scanner in= new Scanner(System.in);
-        System.out.print("Name: ");
-        String name=in.next();
-        System.out.print("Password: ");
-        String psw= in.next();
+        //System.out.println("---------- ORGANIZATION ADMIN REGISTRATION ----------");
+        //Scanner in= new Scanner(System.in);
+        //System.out.print("Name: ");
+        String name=org_name+"Admin";
+        //System.out.print("Password: ");
+        String psw= org_name+"AdminPsw";
         
         String org_directory= peer_org? "peerOrganizations":"ordererOrganizations";
         
@@ -1667,6 +1704,7 @@ public class Blockchain {
         createLocalMsp("Consenters","Host1", false);
         createLocalMsp("Consenters","Host2", false);
         createLocalMsp("Consenters","Host3", false);
+        
         //CONFIGURAZIONE CONFIGTX.YAML 
         File file = new File(mainDirectory + "/bin/configtx.yaml");
         
@@ -1678,7 +1716,7 @@ public class Blockchain {
         Map<String,Object> data;
         try (InputStream inputStream = new FileInputStream(file)) {
             data = yamlWithOptions.load(inputStream);
-}
+        }
 
         
         //Orderers
@@ -1890,6 +1928,96 @@ public class Blockchain {
         
         executeWSLCommand("cd $(pwd)/"+mainDirectory+"/bin &&"
                 + "./configtxgen -profile OrdererGenesis -channelID system-channel -outputBlock ./genesis_block.pb");
+        
+        //avvio degli orderer Host1, Host2 e Host3
+        
+        //------------------HOST1------------------
+        organizationAdminRegistrationEnroll("Consenters", false);
+        createConfig_yaml("organizations/ordererOrganizations/"+"Consenters"+"/msp");
+        download_orderer_bin("Host1");
+        configure_orderer("Host1","Consenters", true);
+        //Aggiunta dell'orderer al file docker-compose.yaml
+        String mspPath=path+"/"+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/Host1/msp";
+        String cfgPath=path+"/"+mainDirectory+"/orderers_bin/Host1/config";
+        String tlsPath=path+"/"+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/Host1/tls";
+        String ledgerPath=path+"/"+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/Host1/ledger";
+        String keysPath=path+"/"+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/Host1/keys";
+        LinkedList<Integer> ports= new LinkedList<Integer>();
+        ports.add(port1);
+        add_orderer_to_docker("Host1",cfgPath,mspPath,tlsPath,ledgerPath,keysPath,ports);
+        //Copia del certificato dell'admin in admincerts
+        executeWSLCommand("cp "+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/Host1/msp/signcerts/cert.pem "+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/Host1/msp/admincerts/");
+        //Avvio del container
+        new ordererThread();
+        //Aspetto che il container si avvi
+        waitForContainer("Host1");
+        
+        
+        //------------------HOST2------------------
+        download_orderer_bin("Host2");
+        configure_orderer("Host2","Consenters", true);
+        //Aggiunta dell'orderer al file docker-compose.yaml
+        mspPath=path+"/"+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/Host2/msp";
+        cfgPath=path+"/"+mainDirectory+"/orderers_bin/Host2/config";
+        tlsPath=path+"/"+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/Host2/tls";
+        ledgerPath=path+"/"+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/Host2/ledger";
+        keysPath=path+"/"+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/Host2/keys";
+        ports.clear();
+        ports.add(port2);
+        add_orderer_to_docker("Host2",cfgPath,mspPath,tlsPath,ledgerPath,keysPath,ports);
+        //Copia del certificato dell'admin in admincerts
+        executeWSLCommand("cp "+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/Host2/msp/signcerts/cert.pem "+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/Host2/msp/admincerts/");
+        //Avvio del container
+        new ordererThread();
+        //Aspetto che il container si avvi
+        waitForContainer("Host2");
+        
+        
+        //------------------HOST3------------------
+        download_orderer_bin("Host3");
+        configure_orderer("Host3","Consenters", true);
+        //Aggiunta dell'orderer al file docker-compose.yaml
+        mspPath=path+"/"+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/Host3/msp";
+        cfgPath=path+"/"+mainDirectory+"/orderers_bin/Host3/config";
+        tlsPath=path+"/"+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/Host3/tls";
+        ledgerPath=path+"/"+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/Host3/ledger";
+        keysPath=path+"/"+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/Host3/keys";
+        ports.clear();
+        ports.add(port3);
+        add_orderer_to_docker("Host3",cfgPath,mspPath,tlsPath,ledgerPath,keysPath,ports);
+        //Copia del certificato dell'admin in admincerts
+        executeWSLCommand("cp "+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/Host3/msp/signcerts/cert.pem "+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/Host3/msp/admincerts/");
+        //Avvio del container
+        new ordererThread();
+        //Aspetto che il container si avvi
+        waitForContainer("Host3");
+        
+        executeWSLCommand("cd "+mainDirectory+" &&"
+                                + "mv fabric-ca-client/tls-ca/tlsadmin/msp/keystore/*_sk fabric-ca-client/tls-ca/tlsadmin/msp/keystore/key.pem");
+        executeWSLCommand("cp "+mainDirectory+"/bin/osnadmin "+mainDirectory);
+                        
+        //Comando per aggungere l'orderer Host1 al canale
+        executeWSLCommand("export OSN_TLS_CA_ROOT_CERT=organizations/ordererOrganizations/Consenters/orderers/Host1/tls/tls-ca-cert.pem &&"
+                        + "export ADMIN_TLS_SIGN_CERT=fabric-ca-client/tls-ca/tlsadmin/msp/signcerts/cert.pem &&"
+                        + "export ADMIN_TLS_PRIVATE_KEY=fabric-ca-client/tls-ca/tlsadmin/msp/keystore/key.pem &&"
+                        + " cd "+mainDirectory+" &&"
+                        + "./osnadmin channel join --channelID system-channel --config-block bin/genesis_block.pb -o 0.0.0.0:"+port1+" --ca-file $OSN_TLS_CA_ROOT_CERT --client-cert $ADMIN_TLS_SIGN_CERT --client-key $ADMIN_TLS_PRIVATE_KEY");
+        //Comando per aggungere l'orderer Host2 al canale
+        executeWSLCommand("export OSN_TLS_CA_ROOT_CERT=organizations/ordererOrganizations/Consenters/orderers/Host2/tls/tls-ca-cert.pem &&"
+                        + "export ADMIN_TLS_SIGN_CERT=fabric-ca-client/tls-ca/tlsadmin/msp/signcerts/cert.pem &&"
+                        + "export ADMIN_TLS_PRIVATE_KEY=fabric-ca-client/tls-ca/tlsadmin/msp/keystore/key.pem &&"
+                        + " cd "+mainDirectory+" &&"
+                        + "./osnadmin channel join --channelID system-channel --config-block bin/genesis_block.pb -o 0.0.0.0:"+port2+" --ca-file $OSN_TLS_CA_ROOT_CERT --client-cert $ADMIN_TLS_SIGN_CERT --client-key $ADMIN_TLS_PRIVATE_KEY");
+        //Comando per aggungere l'orderer Host3 al canale
+        executeWSLCommand("export OSN_TLS_CA_ROOT_CERT=organizations/ordererOrganizations/Consenters/orderers/Host3/tls/tls-ca-cert.pem &&"
+                        + "export ADMIN_TLS_SIGN_CERT=fabric-ca-client/tls-ca/tlsadmin/msp/signcerts/cert.pem &&"
+                        + "export ADMIN_TLS_PRIVATE_KEY=fabric-ca-client/tls-ca/tlsadmin/msp/keystore/key.pem &&"
+                        + " cd "+mainDirectory+" &&"
+                        + "./osnadmin channel join --channelID system-channel --config-block bin/genesis_block.pb -o 0.0.0.0:"+port3+" --ca-file $OSN_TLS_CA_ROOT_CERT --client-cert $ADMIN_TLS_SIGN_CERT --client-key $ADMIN_TLS_PRIVATE_KEY");
+        
+        
+        
+        
     }
     
     private static Map<String,Object> createOrdererPolicies(boolean blockValidation){
