@@ -10,14 +10,16 @@ package com.blockchain.blockchain;
  * @author simo0
  */
 public class FabricIntermediateServerThread extends Thread{
-    public FabricIntermediateServerThread(){
+    private String mainDir;
+    public FabricIntermediateServerThread(String mainDir){
+        this.mainDir=mainDir;
         this.start();
     }
     
     public void run(){
-        Blockchain.executeWSLCommand("cd Prova &&"
+        Blockchain.executeWSLCommand("cd "+mainDir+" &&"
                 + "docker compose down");
-        Blockchain.executeWSLCommand("cd Prova &&"
+        Blockchain.executeWSLCommand("cd "+mainDir+" &&"
                 + "docker compose up -d");
         
     }

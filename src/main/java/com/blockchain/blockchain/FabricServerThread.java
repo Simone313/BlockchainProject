@@ -11,13 +11,15 @@ package com.blockchain.blockchain;
  */
 public class FabricServerThread extends Thread{
     String directory;
-    public FabricServerThread(int i){
+    String mainDir;
+    public FabricServerThread(int i, String mainDir){
         directory=Blockchain.fabric_ca_server_name;
+        this.mainDir=mainDir;
         this.start();
     }
     
     public void run(){
-        Blockchain.executeWSLCommand("cd Prova/"+directory+" &&"
+        Blockchain.executeWSLCommand("cd "+mainDir+"/"+directory+" &&"
                 + "docker compose up -d");
     }
     

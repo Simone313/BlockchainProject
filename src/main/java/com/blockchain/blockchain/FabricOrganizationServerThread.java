@@ -12,7 +12,9 @@ package com.blockchain.blockchain;
  */
 public class FabricOrganizationServerThread extends Thread{
     String directory;
-    public FabricOrganizationServerThread(int i){
+    String mainDir;
+    public FabricOrganizationServerThread(int i, String mainDir){
+        this.mainDir=mainDir;
         directory="fabric-ca-server-org"+(i+1);
         this.start();
         
@@ -20,9 +22,9 @@ public class FabricOrganizationServerThread extends Thread{
     
     
     public void run(){
-        Blockchain.executeWSLCommand("cd Prova/"+directory+" &&"
+        Blockchain.executeWSLCommand("cd "+mainDir+"/"+directory+" &&"
                 + "docker compose down");
-        Blockchain.executeWSLCommand("cd Prova/"+directory+" &&"
+        Blockchain.executeWSLCommand("cd "+mainDir+"/"+directory+" &&"
                 + "docker compose up -d");
        
     }
