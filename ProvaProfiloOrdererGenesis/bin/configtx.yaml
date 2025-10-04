@@ -1,0 +1,265 @@
+Organizations:
+- Name: SampleOrg
+  SkipAsForeign: false
+  ID: SampleOrg
+  MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/peerOrganizations/org1.example.com/msp
+  Policies:
+    Readers:
+      Type: Signature
+      Rule: OR('SampleOrg.member')
+    Writers:
+      Type: Signature
+      Rule: OR('SampleOrg.member')
+    Admins:
+      Type: Signature
+      Rule: OR('SampleOrg.admin')
+    Endorsement:
+      Type: Signature
+      Rule: OR('SampleOrg.member')
+  OrdererEndpoints:
+  - orderer1.example.com:7080
+  - orderer2.example.com:7081
+  - orderer3.example.com:7082
+  AnchorPeers:
+  - Host: 127.0.0.1
+    Port: 7051
+Capabilities:
+  Channel:
+    V2_0: true
+  Orderer:
+    V2_0: true
+  Application:
+    V2_5: true
+Application:
+  ACLs:
+    _lifecycle/CheckCommitReadiness: /Channel/Application/Writers
+    _lifecycle/CommitChaincodeDefinition: /Channel/Application/Writers
+    _lifecycle/QueryChaincodeDefinition: /Channel/Application/Writers
+    _lifecycle/QueryChaincodeDefinitions: /Channel/Application/Writers
+    lscc/ChaincodeExists: /Channel/Application/Readers
+    lscc/GetDeploymentSpec: /Channel/Application/Readers
+    lscc/GetChaincodeData: /Channel/Application/Readers
+    lscc/GetInstantiatedChaincodes: /Channel/Application/Readers
+    qscc/GetChainInfo: /Channel/Application/Readers
+    qscc/GetBlockByNumber: /Channel/Application/Readers
+    qscc/GetBlockByHash: /Channel/Application/Readers
+    qscc/GetTransactionByID: /Channel/Application/Readers
+    qscc/GetBlockByTxID: /Channel/Application/Readers
+    cscc/GetConfigBlock: /Channel/Application/Readers
+    cscc/GetChannelConfig: /Channel/Application/Readers
+    peer/Propose: /Channel/Application/Writers
+    peer/ChaincodeToChaincode: /Channel/Application/Writers
+    event/Block: /Channel/Application/Readers
+    event/FilteredBlock: /Channel/Application/Readers
+  Organizations: null
+  Policies:
+    LifecycleEndorsement:
+      Type: ImplicitMeta
+      Rule: MAJORITY Endorsement
+    Endorsement:
+      Type: ImplicitMeta
+      Rule: MAJORITY Endorsement
+    Readers:
+      Type: ImplicitMeta
+      Rule: ANY Readers
+    Writers:
+      Type: ImplicitMeta
+      Rule: ANY Writers
+    Admins:
+      Type: ImplicitMeta
+      Rule: MAJORITY Admins
+  Capabilities:
+    V2_5: true
+Orderer:
+  OrdererType: etcdraft
+  Addresses: null
+  BatchTimeout: 2s
+  BatchSize:
+    MaxMessageCount: 500
+    AbsoluteMaxBytes: 10 MB
+    PreferredMaxBytes: 2 MB
+  MaxChannels: 0
+  Kafka:
+    Brokers:
+    - kafka0:9092
+    - kafka1:9092
+    - kafka2:9092
+  EtcdRaft:
+    Consenters: &id001
+    - ClientTLSCert: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProfiloOrdererGenesis/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/tlsclient/client.crt
+      Port: 7080
+      Host: orderer1.example.com
+      ServerTLSCert: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProfiloOrdererGenesis/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/tls/server.crt
+    - ClientTLSCert: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProfiloOrdererGenesis/organizations/ordererOrganizations/Consenters/orderers/orderer2.example.com/tlsclient/client.crt
+      Port: 7081
+      Host: orderer2.example.com
+      ServerTLSCert: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProfiloOrdererGenesis/organizations/ordererOrganizations/Consenters/orderers/orderer2.example.com/tls/server.crt
+    - ClientTLSCert: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProfiloOrdererGenesis/organizations/ordererOrganizations/Consenters/orderers/orderer3.example.com/tlsclient/client.crt
+      Port: 7082
+      Host: orderer3.example.com
+      ServerTLSCert: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProfiloOrdererGenesis/organizations/ordererOrganizations/Consenters/orderers/orderer3.example.com/tls/server.crt
+    Options:
+      TickInterval: 500ms
+      ElectionTick: 10
+      HeartbeatTick: 1
+      MaxInflightBlocks: 5
+      SnapshotIntervalSize: 16 MB
+  Organizations: &id002
+  - Policies:
+      Writers:
+        Type: Signature
+        Rule: OR('Host1MSP.member')
+      Admins:
+        Type: Signature
+        Rule: OR('Host1MSP.admin')
+      Readers:
+        Type: Signature
+        Rule: OR('Host1MSP.member')
+    ID: Host1MSP
+    Name: Host1MSP
+    MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProfiloOrdererGenesis/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/msp
+  - Policies:
+      Writers:
+        Type: Signature
+        Rule: OR('Host2MSP.member')
+      Admins:
+        Type: Signature
+        Rule: OR('Host2MSP.admin')
+      Readers:
+        Type: Signature
+        Rule: OR('Host2MSP.member')
+    ID: Host2MSP
+    Name: Host2MSP
+    MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProfiloOrdererGenesis/organizations/ordererOrganizations/Consenters/orderers/orderer2.example.com/msp
+  - Policies:
+      Writers:
+        Type: Signature
+        Rule: OR('Host3MSP.member')
+      Admins:
+        Type: Signature
+        Rule: OR('Host3MSP.admin')
+      Readers:
+        Type: Signature
+        Rule: OR('Host3MSP.member')
+    ID: Host3MSP
+    Name: Host3MSP
+    MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProfiloOrdererGenesis/organizations/ordererOrganizations/Consenters/orderers/orderer3.example.com/msp
+  Policies:
+    Readers:
+      Type: ImplicitMeta
+      Rule: ANY Readers
+    Writers:
+      Type: ImplicitMeta
+      Rule: ANY Writers
+    Admins:
+      Type: ImplicitMeta
+      Rule: MAJORITY Admins
+    BlockValidation:
+      Type: ImplicitMeta
+      Rule: ANY Writers
+  Capabilities:
+    V2_0: true
+Channel:
+  Policies:
+    Readers:
+      Type: ImplicitMeta
+      Rule: ANY Readers
+    Writers:
+      Type: ImplicitMeta
+      Rule: ANY Writers
+    Admins:
+      Type: ImplicitMeta
+      Rule: MAJORITY Admins
+  Capabilities:
+    V2_0: true
+Profiles:
+  ApplicationChannel:
+    Consortium: SampleConsortium
+    Application:
+      Policies:
+        Writers:
+          Type: ImplicitMeta
+          Rule: ANY Writers
+        Admins:
+          Type: ImplicitMeta
+          Rule: MAJORITY Admins
+        Readers:
+          Type: ImplicitMeta
+          Rule: ANY Readers
+      Organizations:
+      - Policies:
+          Writers:
+            Type: Signature
+            Rule: OR('Host1MSP.member')
+          Admins:
+            Type: Signature
+            Rule: OR('Host1MSP.admin')
+          Readers:
+            Type: Signature
+            Rule: OR('Host1MSP.member')
+        ID: Host1MSP
+        Name: Host1MSP
+        MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProfiloOrdererGenesis/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/msp
+      - Policies:
+          Writers:
+            Type: Signature
+            Rule: OR('Host2MSP.member')
+          Admins:
+            Type: Signature
+            Rule: OR('Host2MSP.admin')
+          Readers:
+            Type: Signature
+            Rule: OR('Host2MSP.member')
+        ID: Host2MSP
+        Name: Host2MSP
+        MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProfiloOrdererGenesis/organizations/ordererOrganizations/Consenters/orderers/orderer2.example.com/msp
+      - Policies:
+          Writers:
+            Type: Signature
+            Rule: OR('Host3MSP.member')
+          Admins:
+            Type: Signature
+            Rule: OR('Host3MSP.admin')
+          Readers:
+            Type: Signature
+            Rule: OR('Host3MSP.member')
+        ID: Host3MSP
+        Name: Host3MSP
+        MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProfiloOrdererGenesis/organizations/ordererOrganizations/Consenters/orderers/orderer3.example.com/msp
+  OrdererGenesis:
+    Policies:
+      Writers:
+        Type: ImplicitMeta
+        Rule: ANY Writers
+      Admins:
+        Type: ImplicitMeta
+        Rule: MAJORITY Admins
+      Readers:
+        Type: ImplicitMeta
+        Rule: ANY Readers
+    Consortiums:
+      SampleConsortium:
+        Organizations: [
+          ]
+    Orderer:
+      Addresses:
+      - orderer1.example.com:7080
+      - orderer2.example.com:7081
+      - orderer3.example.com:7082
+      OrdererType: etcdraft
+      Policies:
+        BlockValidation:
+          Type: ImplicitMeta
+          Rule: ANY Writers
+        Writers:
+          Type: ImplicitMeta
+          Rule: ANY Writers
+        Admins:
+          Type: ImplicitMeta
+          Rule: MAJORITY Admins
+        Readers:
+          Type: ImplicitMeta
+          Rule: ANY Readers
+      EtcdRaft:
+        Consenters: *id001
+      Organizations: *id002

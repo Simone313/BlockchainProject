@@ -1,3 +1,9 @@
+com\blockchain\blockchain\FabricOrganizationServerThread.class
+com\blockchain\blockchain\ordererThread.class
 com\blockchain\blockchain\Blockchain.class
+com\blockchain\blockchain\CouchDB.class
 com\blockchain\blockchain\FabricServerThread.class
 com\blockchain\blockchain\ServerCA.class
+.netbeans_automatic_build
+com\blockchain\blockchain\peerThread.class
+com\blockchain\blockchain\FabricIntermediateServerThread.class
