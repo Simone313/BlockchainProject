@@ -1,0 +1,554 @@
+Organizations:
+- &id006
+  Name: SampleOrg
+  SkipAsForeign: false
+  ID: SampleOrg
+  MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/peerOrganizations/org1.example.com/msp
+  Policies: &id017
+    Readers: &id009
+      Type: Signature
+      Rule: OR('SampleOrg.member')
+    Writers: &id010
+      Type: Signature
+      Rule: OR('SampleOrg.member')
+    Admins:
+      Type: Signature
+      Rule: OR('SampleOrg.admin')
+    Endorsement: &id011
+      Type: Signature
+      Rule: OR('SampleOrg.member')
+  OrdererEndpoints:
+  - orderer1.example.com:7080
+  - orderer2.example.com:7081
+  - orderer3.example.com:7082
+  AnchorPeers: &id012
+  - Host: 127.0.0.1
+    Port: 7051
+Capabilities:
+  Channel:
+    V2_0: true
+  Orderer:
+    V2_0: true
+  Application:
+    V2_5: true
+Application:
+  ACLs: &id013
+    _lifecycle/CheckCommitReadiness: /Channel/Application/Writers
+    _lifecycle/CommitChaincodeDefinition: /Channel/Application/Writers
+    _lifecycle/QueryChaincodeDefinition: /Channel/Application/Writers
+    _lifecycle/QueryChaincodeDefinitions: /Channel/Application/Writers
+    lscc/ChaincodeExists: /Channel/Application/Readers
+    lscc/GetDeploymentSpec: /Channel/Application/Readers
+    lscc/GetChaincodeData: /Channel/Application/Readers
+    lscc/GetInstantiatedChaincodes: /Channel/Application/Readers
+    qscc/GetChainInfo: /Channel/Application/Readers
+    qscc/GetBlockByNumber: /Channel/Application/Readers
+    qscc/GetBlockByHash: /Channel/Application/Readers
+    qscc/GetTransactionByID: /Channel/Application/Readers
+    qscc/GetBlockByTxID: /Channel/Application/Readers
+    cscc/GetConfigBlock: /Channel/Application/Readers
+    cscc/GetChannelConfig: /Channel/Application/Readers
+    peer/Propose: /Channel/Application/Writers
+    peer/ChaincodeToChaincode: /Channel/Application/Writers
+    event/Block: /Channel/Application/Readers
+    event/FilteredBlock: /Channel/Application/Readers
+  Organizations: null
+  Policies: &id015
+    LifecycleEndorsement:
+      Type: ImplicitMeta
+      Rule: MAJORITY Endorsement
+    Endorsement:
+      Type: ImplicitMeta
+      Rule: MAJORITY Endorsement
+    Readers:
+      Type: ImplicitMeta
+      Rule: ANY Readers
+    Writers:
+      Type: ImplicitMeta
+      Rule: ANY Writers
+    Admins:
+      Type: ImplicitMeta
+      Rule: MAJORITY Admins
+  Capabilities: &id016
+    V2_5: true
+Orderer:
+  OrdererType: etcdraft
+  Addresses: null
+  BatchTimeout: 2s
+  BatchSize: &id003
+    MaxMessageCount: 500
+    AbsoluteMaxBytes: 10 MB
+    PreferredMaxBytes: 2 MB
+  MaxChannels: 0
+  Kafka: &id004
+    Brokers:
+    - kafka0:9092
+    - kafka1:9092
+    - kafka2:9092
+  EtcdRaft: &id005
+    Consenters:
+    - ClientTLSCert: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/tlsclient/client.crt
+      Port: 7080
+      Host: orderer1.example.com
+      ServerTLSCert: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/tls/server.crt
+    - ClientTLSCert: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/orderer2.example.com/tlsclient/client.crt
+      Port: 7081
+      Host: orderer2.example.com
+      ServerTLSCert: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/orderer2.example.com/tls/server.crt
+    - ClientTLSCert: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/orderer3.example.com/tlsclient/client.crt
+      Port: 7082
+      Host: orderer3.example.com
+      ServerTLSCert: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/orderer3.example.com/tls/server.crt
+    Options:
+      TickInterval: 500ms
+      ElectionTick: 10
+      HeartbeatTick: 1
+      MaxInflightBlocks: 5
+      SnapshotIntervalSize: 16 MB
+  Organizations:
+  - Policies:
+      Writers:
+        Type: Signature
+        Rule: OR('Host1MSP.member')
+      Admins:
+        Type: Signature
+        Rule: OR('Host1MSP.admin')
+      Readers:
+        Type: Signature
+        Rule: OR('Host1MSP.member')
+    ID: Host1MSP
+    Name: Host1MSP
+    MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/msp
+  - Policies:
+      Writers:
+        Type: Signature
+        Rule: OR('Host2MSP.member')
+      Admins:
+        Type: Signature
+        Rule: OR('Host2MSP.admin')
+      Readers:
+        Type: Signature
+        Rule: OR('Host2MSP.member')
+    ID: Host2MSP
+    Name: Host2MSP
+    MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/orderer2.example.com/msp
+  - Policies:
+      Writers:
+        Type: Signature
+        Rule: OR('Host3MSP.member')
+      Admins:
+        Type: Signature
+        Rule: OR('Host3MSP.admin')
+      Readers:
+        Type: Signature
+        Rule: OR('Host3MSP.member')
+    ID: Host3MSP
+    Name: Host3MSP
+    MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/orderer3.example.com/msp
+  Policies: &id007
+    Readers:
+      Type: ImplicitMeta
+      Rule: ANY Readers
+    Writers:
+      Type: ImplicitMeta
+      Rule: ANY Writers
+    Admins:
+      Type: ImplicitMeta
+      Rule: MAJORITY Admins
+    BlockValidation:
+      Type: ImplicitMeta
+      Rule: ANY Writers
+  Capabilities: &id008
+    V2_0: true
+Channel:
+  Policies: &id001
+    Readers:
+      Type: ImplicitMeta
+      Rule: ANY Readers
+    Writers:
+      Type: ImplicitMeta
+      Rule: ANY Writers
+    Admins:
+      Type: ImplicitMeta
+      Rule: MAJORITY Admins
+  Capabilities: &id002
+    V2_0: true
+Profiles:
+  SampleSingleMSPSolo:
+    Policies: *id001
+    Capabilities: *id002
+    Orderer:
+      OrdererType: solo
+      Addresses: null
+      BatchTimeout: 2s
+      BatchSize: *id003
+      MaxChannels: 0
+      Kafka: *id004
+      EtcdRaft: *id005
+      Organizations:
+      - *id006
+      Policies: *id007
+      Capabilities: *id008
+    Consortiums:
+      SampleConsortium:
+        Organizations:
+        - *id006
+  SampleSingleMSPKafka:
+    Policies: *id001
+    Capabilities: *id002
+    Orderer:
+      OrdererType: kafka
+      Addresses: null
+      BatchTimeout: 2s
+      BatchSize: *id003
+      MaxChannels: 0
+      Kafka: *id004
+      EtcdRaft: *id005
+      Organizations:
+      - *id006
+      Policies: *id007
+      Capabilities: *id008
+    Consortiums:
+      SampleConsortium:
+        Organizations:
+        - *id006
+  SampleInsecureSolo:
+    Policies: *id001
+    Capabilities: *id002
+    Orderer:
+      OrdererType: solo
+      Addresses: null
+      BatchTimeout: 2s
+      BatchSize: *id003
+      MaxChannels: 0
+      Kafka: *id004
+      EtcdRaft: *id005
+      Organizations: null
+      Policies: *id007
+      Capabilities: *id008
+    Consortiums:
+      SampleConsortium:
+        Organizations: null
+  SampleInsecureKafka:
+    Policies: *id001
+    Capabilities: *id002
+    Orderer:
+      OrdererType: kafka
+      Addresses: null
+      BatchTimeout: 2s
+      BatchSize: *id003
+      MaxChannels: 0
+      Kafka: *id004
+      EtcdRaft: *id005
+      Organizations: null
+      Policies: *id007
+      Capabilities: *id008
+    Consortiums:
+      SampleConsortium:
+        Organizations: null
+  SampleDevModeSolo:
+    Policies: *id001
+    Capabilities: *id002
+    Orderer:
+      OrdererType: solo
+      Addresses: null
+      BatchTimeout: 2s
+      BatchSize: *id003
+      MaxChannels: 0
+      Kafka: *id004
+      EtcdRaft: *id005
+      Organizations:
+      - Name: SampleOrg
+        SkipAsForeign: false
+        ID: SampleOrg
+        MSPDir: msp
+        Policies:
+          Readers: *id009
+          Writers: *id010
+          Admins:
+            Type: Signature
+            Rule: OR('SampleOrg.member')
+          Endorsement: *id011
+        OrdererEndpoints: &id014
+        - 127.0.0.1:7050
+        AnchorPeers: *id012
+      Policies: *id007
+      Capabilities: *id008
+    Application:
+      ACLs: *id013
+      Organizations:
+      - Name: SampleOrg
+        SkipAsForeign: false
+        ID: SampleOrg
+        MSPDir: msp
+        Policies:
+          Readers: *id009
+          Writers: *id010
+          Admins:
+            Type: Signature
+            Rule: OR('SampleOrg.member')
+          Endorsement: *id011
+        OrdererEndpoints: *id014
+        AnchorPeers: *id012
+      Policies: *id015
+      Capabilities: *id016
+    Consortiums:
+      SampleConsortium:
+        Organizations:
+        - Name: SampleOrg
+          SkipAsForeign: false
+          ID: SampleOrg
+          MSPDir: msp
+          Policies:
+            Readers: *id009
+            Writers: *id010
+            Admins:
+              Type: Signature
+              Rule: OR('SampleOrg.member')
+            Endorsement: *id011
+          OrdererEndpoints: *id014
+          AnchorPeers: *id012
+  SampleDevModeKafka:
+    Policies: *id001
+    Capabilities: *id002
+    Orderer:
+      OrdererType: kafka
+      Addresses: null
+      BatchTimeout: 2s
+      BatchSize: *id003
+      MaxChannels: 0
+      Kafka: *id004
+      EtcdRaft: *id005
+      Organizations:
+      - Name: SampleOrg
+        SkipAsForeign: false
+        ID: SampleOrg
+        MSPDir: msp
+        Policies:
+          Readers: *id009
+          Writers: *id010
+          Admins:
+            Type: Signature
+            Rule: OR('SampleOrg.member')
+          Endorsement: *id011
+        OrdererEndpoints: *id014
+        AnchorPeers: *id012
+      Policies: *id007
+      Capabilities: *id008
+    Application:
+      ACLs: *id013
+      Organizations:
+      - Name: SampleOrg
+        SkipAsForeign: false
+        ID: SampleOrg
+        MSPDir: msp
+        Policies:
+          Readers: *id009
+          Writers: *id010
+          Admins:
+            Type: Signature
+            Rule: OR('SampleOrg.member')
+          Endorsement: *id011
+        OrdererEndpoints: *id014
+        AnchorPeers: *id012
+      Policies: *id015
+      Capabilities: *id016
+    Consortiums:
+      SampleConsortium:
+        Organizations:
+        - Name: SampleOrg
+          SkipAsForeign: false
+          ID: SampleOrg
+          MSPDir: msp
+          Policies:
+            Readers: *id009
+            Writers: *id010
+            Admins:
+              Type: Signature
+              Rule: OR('SampleOrg.member')
+            Endorsement: *id011
+          OrdererEndpoints: *id014
+          AnchorPeers: *id012
+  SampleSingleMSPChannel:
+    Policies: *id001
+    Capabilities: *id002
+    Consortium: SampleConsortium
+    Application:
+      ACLs: *id013
+      Organizations:
+      - Name: SampleOrg
+        SkipAsForeign: false
+        ID: SampleOrg
+        MSPDir: msp
+        Policies: *id017
+        OrdererEndpoints: *id014
+        AnchorPeers: *id012
+      Policies: *id015
+      Capabilities: *id016
+  SampleDevModeEtcdRaft:
+    Policies: *id001
+    Capabilities: *id002
+    Orderer:
+      OrdererType: etcdraft
+      Addresses: null
+      BatchTimeout: 2s
+      BatchSize: *id003
+      MaxChannels: 0
+      Kafka: *id004
+      EtcdRaft: *id005
+      Organizations:
+      - Name: SampleOrg
+        SkipAsForeign: false
+        ID: SampleOrg
+        MSPDir: msp
+        Policies:
+          Readers: *id009
+          Writers: *id010
+          Admins:
+            Type: Signature
+            Rule: OR('SampleOrg.member')
+          Endorsement: *id011
+        OrdererEndpoints: *id014
+        AnchorPeers: *id012
+      Policies: *id007
+      Capabilities: *id008
+    Application:
+      ACLs: *id013
+      Organizations:
+      - Name: SampleOrg
+        SkipAsForeign: false
+        ID: SampleOrg
+        MSPDir: msp
+        Policies:
+          Readers: *id009
+          Writers: *id010
+          Admins:
+            Type: Signature
+            Rule: OR('SampleOrg.member')
+          Endorsement: *id011
+        OrdererEndpoints: *id014
+        AnchorPeers: *id012
+      Policies: *id015
+      Capabilities: *id016
+    Consortiums:
+      SampleConsortium:
+        Organizations:
+        - Name: SampleOrg
+          SkipAsForeign: false
+          ID: SampleOrg
+          MSPDir: msp
+          Policies:
+            Readers: *id009
+            Writers: *id010
+            Admins:
+              Type: Signature
+              Rule: OR('SampleOrg.member')
+            Endorsement: *id011
+          OrdererEndpoints: *id014
+          AnchorPeers: *id012
+  SampleAppChannelInsecureSolo:
+    Policies: *id001
+    Capabilities: *id002
+    Orderer:
+      OrdererType: solo
+      Addresses: null
+      BatchTimeout: 2s
+      BatchSize: *id003
+      MaxChannels: 0
+      Kafka: *id004
+      EtcdRaft: *id005
+      Organizations: null
+      Policies: *id007
+      Capabilities: *id008
+    Application:
+      ACLs: *id013
+      Organizations: null
+      Policies: *id015
+      Capabilities: *id016
+  SampleAppChannelEtcdRaft:
+    Policies: *id001
+    Capabilities: *id002
+    Orderer:
+      OrdererType: etcdraft
+      Addresses: null
+      BatchTimeout: 2s
+      BatchSize: *id003
+      MaxChannels: 0
+      Kafka: *id004
+      EtcdRaft: *id005
+      Organizations:
+      - Name: SampleOrg
+        SkipAsForeign: false
+        ID: SampleOrg
+        MSPDir: msp
+        Policies:
+          Readers: *id009
+          Writers: *id010
+          Admins:
+            Type: Signature
+            Rule: OR('SampleOrg.member')
+          Endorsement: *id011
+        OrdererEndpoints: *id014
+        AnchorPeers: *id012
+      Policies: *id007
+      Capabilities: *id008
+    Application:
+      ACLs: *id013
+      Organizations:
+      - Name: SampleOrg
+        SkipAsForeign: false
+        ID: SampleOrg
+        MSPDir: msp
+        Policies:
+          Readers: *id009
+          Writers: *id010
+          Admins:
+            Type: Signature
+            Rule: OR('SampleOrg.member')
+          Endorsement: *id011
+        OrdererEndpoints: *id014
+        AnchorPeers: *id012
+      Policies: *id015
+      Capabilities: *id016
+    Consortiums:
+      SampleConsortium:
+        Organizations:
+        - Policies:
+            Writers:
+              Type: Signature
+              Rule: OR('Host1MSP.member')
+            Admins:
+              Type: Signature
+              Rule: OR('Host1MSP.admin')
+            Readers:
+              Type: Signature
+              Rule: OR('Host1MSP.member')
+          ID: Host1MSP
+          Name: Host1MSP
+          MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/msp
+        - Policies:
+            Writers:
+              Type: Signature
+              Rule: OR('Host2MSP.member')
+            Admins:
+              Type: Signature
+              Rule: OR('Host2MSP.admin')
+            Readers:
+              Type: Signature
+              Rule: OR('Host2MSP.member')
+          ID: Host2MSP
+          Name: Host2MSP
+          MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/orderer2.example.com/msp
+        - Policies:
+            Writers:
+              Type: Signature
+              Rule: OR('Host3MSP.member')
+            Admins:
+              Type: Signature
+              Rule: OR('Host3MSP.admin')
+            Readers:
+              Type: Signature
+              Rule: OR('Host3MSP.member')
+          ID: Host3MSP
+          Name: Host3MSP
+          MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/orderer3.example.com/msp

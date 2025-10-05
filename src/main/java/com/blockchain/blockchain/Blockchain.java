@@ -1984,15 +1984,21 @@ public class Blockchain {
         
         //Aggiunta Consortiums al profilo SampleAppChannelEtcdRaft
         Map<String,Object> SampleAppChannelEtcdRaft_profile=(Map<String,Object>)((Map<String,Object>) data.get("Profiles")).get("SampleAppChannelEtcdRaft");
-        SampleAppChannelEtcdRaft_profile.put("Consortiums","      SampleConsortium:\n" +
-"        Organizations:\n" +
-"        - *id006");
+        sampleConsortium = new LinkedHashMap<>();
+        sampleConsortium.put("Organizations", Arrays.asList(host1,host2,host3));
+
+        consortiums = new LinkedHashMap<>();
+        consortiums.put("SampleConsortium", sampleConsortium);
+
+        SampleAppChannelEtcdRaft_profile.put("Consortiums", consortiums);
+
         
         //Writing
         DumperOptions op = new DumperOptions();
         op.setIndent(2);
         op.setPrettyFlow(true);
         op.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+
         Yaml yamlWriter = new Yaml(op);
 
         try (FileWriter writer = new FileWriter(file)) {
@@ -2005,7 +2011,7 @@ public class Blockchain {
         String channel_name=in.next();
         executeWSLCommand("cp -r $(pwd)/"+mainDirectory+"/organizations/peerOrganizations/org1.example.com/msp $(pwd)/"+mainDirectory+"/bin");
         executeWSLCommand("cd $(pwd)/"+mainDirectory+"/bin &&"
-                + "./configtxgen -configPath $(pwd)/"+mainDirectory+"/bin  -profile OrdererGenesis -channelID "+channel_name+" -outputBlock ./genesis_block.pb");
+                + "./configtxgen -configPath $(pwd)/"+mainDirectory+"/bin  -profile SampleAppChannelEtcdRaft -channelID "+channel_name+" -outputBlock ./genesis_block.pb");
         
         //avvio degli orderer orderer1.example.com, orderer2.example.com e orderer3.example.com
         
