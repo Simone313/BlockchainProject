@@ -468,6 +468,10 @@ Profiles:
   SampleAppChannelEtcdRaft:
     Policies: *id001
     Capabilities: *id002
+    Consortiums:
+      SampleConsortium:
+        Organizations: [
+          ]
     Orderer:
       OrdererType: etcdraft
       Addresses: null
@@ -477,78 +481,63 @@ Profiles:
       Kafka: *id004
       EtcdRaft: *id005
       Organizations:
-      - Name: SampleOrg
-        SkipAsForeign: false
-        ID: SampleOrg
-        MSPDir: msp
-        Policies:
-          Readers: *id009
-          Writers: *id010
+      - Policies:
+          Writers:
+            Type: Signature
+            Rule: OR('Host1MSP.member')
           Admins:
             Type: Signature
-            Rule: OR('SampleOrg.member')
-          Endorsement: *id011
-        OrdererEndpoints: *id014
-        AnchorPeers: *id012
+            Rule: OR('Host1MSP.admin')
+          Readers:
+            Type: Signature
+            Rule: OR('Host1MSP.member')
+        ID: Host1MSP
+        Name: Host1MSP
+        MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/msp
+      - Policies:
+          Writers:
+            Type: Signature
+            Rule: OR('Host2MSP.member')
+          Admins:
+            Type: Signature
+            Rule: OR('Host2MSP.admin')
+          Readers:
+            Type: Signature
+            Rule: OR('Host2MSP.member')
+        ID: Host2MSP
+        Name: Host2MSP
+        MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/orderer2.example.com/msp
+      - Policies:
+          Writers:
+            Type: Signature
+            Rule: OR('Host3MSP.member')
+          Admins:
+            Type: Signature
+            Rule: OR('Host3MSP.admin')
+          Readers:
+            Type: Signature
+            Rule: OR('Host3MSP.member')
+        ID: Host3MSP
+        Name: Host3MSP
+        MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/orderer3.example.com/msp
       Policies: *id007
       Capabilities: *id008
     Application:
       ACLs: *id013
       Organizations:
-      - Name: SampleOrg
-        SkipAsForeign: false
-        ID: SampleOrg
-        MSPDir: msp
-        Policies:
-          Readers: *id009
-          Writers: *id010
+      - Policies:
+          Writers:
+            Type: Signature
+            Rule: OR('Org1.member')
           Admins:
             Type: Signature
-            Rule: OR('SampleOrg.member')
-          Endorsement: *id011
-        OrdererEndpoints: *id014
-        AnchorPeers: *id012
+            Rule: OR('Org1.admin')
+          Readers:
+            Type: Signature
+            Rule: OR('Org1.member')
+        ID: Org1
+        Name: Org1
+        MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/peerOrganizations/org1.example.com/msp
       Policies: *id015
       Capabilities: *id016
-    Consortiums:
-      SampleConsortium:
-        Organizations:
-        - Policies:
-            Writers:
-              Type: Signature
-              Rule: OR('Host1MSP.member')
-            Admins:
-              Type: Signature
-              Rule: OR('Host1MSP.admin')
-            Readers:
-              Type: Signature
-              Rule: OR('Host1MSP.member')
-          ID: Host1MSP
-          Name: Host1MSP
-          MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/msp
-        - Policies:
-            Writers:
-              Type: Signature
-              Rule: OR('Host2MSP.member')
-            Admins:
-              Type: Signature
-              Rule: OR('Host2MSP.admin')
-            Readers:
-              Type: Signature
-              Rule: OR('Host2MSP.member')
-          ID: Host2MSP
-          Name: Host2MSP
-          MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/orderer2.example.com/msp
-        - Policies:
-            Writers:
-              Type: Signature
-              Rule: OR('Host3MSP.member')
-            Admins:
-              Type: Signature
-              Rule: OR('Host3MSP.admin')
-            Readers:
-              Type: Signature
-              Rule: OR('Host3MSP.member')
-          ID: Host3MSP
-          Name: Host3MSP
-          MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Prova/organizations/ordererOrganizations/Consenters/orderers/orderer3.example.com/msp
+    Consortium: SampleConsortium

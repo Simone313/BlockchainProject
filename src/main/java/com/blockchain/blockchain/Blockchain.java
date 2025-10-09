@@ -74,63 +74,95 @@ public class Blockchain {
     static String int_ca_name;
     static String first_peer;
     
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, InterruptedException {
         Scanner in= new Scanner(System.in);
-        boolean loop=false;
-        do{
-            System.out.println(" -------- MAIN MENU -------- ");
-            System.out.println("1) open project");
-            System.out.println("2) new project");
-            switch(in.nextInt()){
-                case 1:{
-                    //TODO funzione open project
-                    System.out.println(" -------- SELECT PROJECT --------");
-                    File projects= new File("projects.txt");
-                    try(BufferedReader reader= new BufferedReader(new FileReader(projects))){
-                        String line;
-                        LinkedList<String> prjs= new LinkedList<String>();
-                        int i=1;
-                        while((line=reader.readLine())!=null){
-                            System.out.println(i+") "+line);
-                            prjs.add(line);
+        boolean loop=true;
+        
+        File projects= new File("src\\main\\java\\com\\blockchain\\blockchain\\projects.txt");
+        try(BufferedReader reader= new BufferedReader(new FileReader(projects))){
+            String line;
+            LinkedList<String> prjs= new LinkedList<String>();
+            while((line=reader.readLine())!=null){
+                prjs.add(line);
+            }
+            
+            do{
+                System.out.println(" -------- MAIN MENU -------- ");
+                System.out.println("1) Open Project");
+                System.out.println("2) New Project");
+                System.out.println("3) Delete Project");
+                System.out.println("4) Exit");
+                switch(in.nextInt()){
+                    case 1:{
+                        //TODO funzione open project
+                        System.out.println(" -------- SELECT PROJECT --------");
+
+                        for(int i=0;i<prjs.size();i++){
+                            System.out.println((i+1)+") "+prjs.get(i));
                         }
+
                         int select= in.nextInt();
                         mainDirectory= prjs.get(select-1);
-                    }catch(IOException e){
-                        System.err.println(e.toString());
+                        break;
                     }
-                    
-                    
+                    case 2:{
+                        System.out.print("Project name: ");
+                        mainDirectory=in.next();
+                        prjs.add(mainDirectory);
+                        String yourPin="simone03";
+                        createDirectory(mainDirectory);
+                        setupCA(yourPin);
+
+                        executeWSLCommand("cd "+mainDirectory+" &&"
+                                + "mkdir peers_bin");
+                        download_peer_bin();
+                        executeWSLCommand("cd "+mainDirectory+" &&"
+                                + "mkdir orderers_bin");
+                        download_orderer_bin();
+                        String channel_n=createGenesisBlock();
+                        //metodo per creare il sistema di cartelle delle organizzazioni
+                        createDirectoryForOrganizations(channel_n);
+                        break;
+                    }
+                    case 3:{
+                        System.out.println(" -------- SELECT PROJECT --------");
+
+                        for(int i=0;i<prjs.size();i++){
+                            System.out.println((i+1)+") "+prjs.get(i));
+                        }
+
+                        int select= in.nextInt();
+                        mainDirectory= prjs.get(select-1);
                         
-                    
-                    loop=false;
-                    break;
+                        prjs.remove(mainDirectory);
+                        executeWSLCommand("cd "+ mainDirectory+" && "
+                                + "docker compose down");
+                        executeWSLCommand("rm -rf "+mainDirectory);
+                        
+                        break;
+                    }
+                    case 4:{
+                        System.out.println("Shutdown in progress...");
+                        break;
+                    }
+                    default:{
+                        System.err.println("Input error, try again");
+                    }
                 }
-                case 2:{
-                    System.out.print("Project name: ");
-                    mainDirectory=in.next();
-                    String yourPin="2003";
-                    createDirectory(mainDirectory);
-                    setupCA(yourPin);
-
-                    executeWSLCommand("cd "+mainDirectory+" &&"
-                            + "mkdir peers_bin");
-                    executeWSLCommand("cd "+mainDirectory+" &&"
-                            + "mkdir orderers_bin");
-
-                    String channel_n=createGenesisBlock();
-                    //metodo per creare il sistema di cartelle delle organizzazioni
-                    createDirectoryForOrganizations(channel_n);
-                    
-                    loop=false;
-                    break;
+                FileWriter fw = new FileWriter(projects, false);
+                String content="";
+                for(int i=0;i<prjs.size();i++){
+                    content=content+prjs.get(i)+"\n";
                 }
-                default:{
-                    System.err.println("Input error, try again");
-                    loop=true;
-                }
-            }
-        }while(loop);
+                fw.write(content);
+            }while(loop);
+            
+            
+            
+        }catch(IOException e){
+            System.err.println(e.toString());
+        }
+        
         
         
         
@@ -144,16 +176,44 @@ public class Blockchain {
     }
     
     /**
+     * @throws InterruptedException 
      * 
      * 
      */
-    private static void setupCA(String pin) throws IOException{
+    private static void setupCA(String pin) throws IOException, InterruptedException{
         Scanner in = new Scanner(System.in);
-        if(executeWSLCommandToString("cd "+ mainDirectory +" && which curl").length()==0){
-            System.out.println("Installing curl...");
-            executeWSLCommand("cd "+ mainDirectory +" && echo "+pin+" | sudo -S apt update && sudo apt install curl");
+        if(executeWSLCommandToString("cd "+ mainDirectory +" && which aria2").length()==0){
+            System.out.println("Installing aria2...");
+            String remoteCmd = "cd '" + mainDirectory + "' && apt update && apt install -y aria2";
+
+            // Chiamiamo wsl.exe e passiamo sudo -S sh -c ... come argomenti: la shell interna gestirà il cd e apt.
+            ProcessBuilder pb = new ProcessBuilder(
+                "wsl.exe", "--", "sudo", "-S", "sh", "-c", remoteCmd
+            );
+
+            // opzionale: eredita env / o setta working dir locale
+            pb.redirectErrorStream(true); // unisce stderr a stdout
+
+            Process p = pb.start();
+
+            // SCRIVO la password su stdin del processo (sudo leggerà da stdin)
+            try (OutputStream os = p.getOutputStream()) {
+                os.write((pin + "\n").getBytes(StandardCharsets.UTF_8));
+                os.flush();
+                // non chiudere immediatamente se il processo può chiedere altro input; qui va bene chiudere
+            }
+
+            // Leggo l'output (stdout + stderr)
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    System.out.println(line);
+                }
+            }
+            int exit = p.waitFor();
+            System.out.println("Exit code: " + exit);
         }else{
-            System.out.println("curl already installed. ");
+            System.out.println("aria2 already installed. ");
         }
         
         if(executeWSLCommandToString("cd "+ mainDirectory +" && ls").contains("fabric-ca-client") && executeWSLCommandToString("cd "+ mainDirectory +" && ls").contains(""+fabric_ca_server_name+"")){
@@ -161,7 +221,7 @@ public class Blockchain {
         }else{
             System.out.println("Installing Fabric CA server and CA client binaries...");
             executeWSLCommand("cd "+ mainDirectory +" && "
-                    + "curl -L -O https://github.com/hyperledger/fabric-ca/releases/download/v1.5.15/hyperledger-fabric-ca-linux-amd64-1.5.15.tar.gz && "
+                    + "aria2c https://github.com/hyperledger/fabric-ca/releases/download/v1.5.15/hyperledger-fabric-ca-linux-amd64-1.5.15.tar.gz && "
                     + "tar -xvzf hyperledger-fabric-ca-linux-amd64-1.5.15.tar.gz &&"
                     + "rm hyperledger-fabric-ca-linux-amd64-1.5.15.tar.gz &&"
                     + "mkdir fabric-ca-client &&"
@@ -685,7 +745,7 @@ public class Blockchain {
                     
                     for(int i=0;i<num_orderer;i++){
                         createLocalMsp(organization_name,orderers_names.get(i),false);
-                        download_orderer_bin(orderers_names.get(i));
+                        copy_orderer_bin(orderers_names.get(i));
                         int port= configure_orderer(orderers_names.get(i),organization_name, num_orderer>1);
                         executeWSLCommand("cd "+mainDirectory+" &&"
                                 + "mv fabric-ca-client/tls-ca/tlsadmin/msp/keystore/*_sk fabric-ca-client/tls-ca/tlsadmin/msp/keystore/key.pem");
@@ -732,7 +792,7 @@ public class Blockchain {
                     
                     
                     for(int i=0;i<num_peer; i++){
-                        download_peer_bin(peers_names.get(i));
+                        copy_peer_bin(peers_names.get(i));
                         channelUpdate(channel_name, organization_name,peers_names.get(i));
                         int peer_port=configure_peer_core(peers_names.get(i), organization_name);
                         
@@ -780,7 +840,7 @@ public class Blockchain {
                 + "cd "+mainDirectory+" && "
                 + "./peer channel fetch config config_block.pb -o orderer1.example.com:7050 "
                 + "-c "+channel_name+" "
-                + "--tls --cafile $PWD/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/tls/ca.crt ");
+                + "--tls --cafile $PWD/"+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/tls/ca.crt ");
         
         executeWSLCommand("cd "+mainDirectory+" &&"
                 + "./configtxlator proto_decode --input config_block.pb --type common.Block --output config_block.json && "
@@ -838,25 +898,39 @@ public class Blockchain {
         
     }
     
-    public static void download_orderer_bin(String orderer_name){
+    public static void download_orderer_bin(){
         //download dei bin
         executeWSLCommand("cd "+mainDirectory+"/orderers_bin &&"
-                + "mkdir "+orderer_name);
-        executeWSLCommand("cd "+mainDirectory+"/orderers_bin/"+orderer_name+" &&"
-                + "curl -L -O https://github.com/hyperledger/fabric/releases/download/v3.1.1/hyperledger-fabric-linux-amd64-3.1.1.tar.gz &&"
+                + "mkdir original_file");
+        executeWSLCommand("cd "+mainDirectory+"/orderers_bin/original_file &&"
+                + "aria2c https://github.com/hyperledger/fabric/releases/download/v3.1.1/hyperledger-fabric-linux-amd64-3.1.1.tar.gz &&"
                 + "tar -xvzf hyperledger-fabric-linux-amd64-3.1.1.tar.gz &&"
                 + "rm hyperledger-fabric-linux-amd64-3.1.1.tar.gz");
 
     }
     
-    public static void download_peer_bin(String peer_name){
+    private static void copy_orderer_bin(String orderer_name){
+        executeWSLCommand("cd "+mainDirectory+"/orderers_bin &&"
+                + "mkdir "+orderer_name);
+        
+        executeWSLCommand("cp -r "+mainDirectory+"/orderers_bin/original_file/* "+mainDirectory+"/orderers_bin/"+orderer_name);
+    }
+    
+    public static void download_peer_bin(){
         //download dei bin
         executeWSLCommand("cd "+mainDirectory+"/peers_bin &&"
-                + "mkdir "+peer_name);
-        executeWSLCommand("cd "+mainDirectory+"/peers_bin/"+peer_name+" &&"
-                + "curl -L -O https://github.com/hyperledger/fabric/releases/download/v3.1.1/hyperledger-fabric-linux-amd64-3.1.1.tar.gz &&"
+                + "mkdir original_file");
+        executeWSLCommand("cd "+mainDirectory+"/peers_bin/original_file &&"
+                + "aria2c https://github.com/hyperledger/fabric/releases/download/v3.1.1/hyperledger-fabric-linux-amd64-3.1.1.tar.gz &&"
                 + "tar -xvzf hyperledger-fabric-linux-amd64-3.1.1.tar.gz &&"
                 + "rm hyperledger-fabric-linux-amd64-3.1.1.tar.gz");
+    }
+    
+    private static void copy_peer_bin(String peer_name){
+        executeWSLCommand("cd "+mainDirectory+"/peers_bin &&"
+                + "mkdir "+peer_name);
+        
+        executeWSLCommand("cp -r "+mainDirectory+"/peers_bin/original_file/* "+mainDirectory+"/peers_bin/"+peer_name);
     }
     
     public static int configure_peer_core(String peer_name, String org_name) throws FileNotFoundException, IOException{
@@ -1893,12 +1967,15 @@ public class Blockchain {
         
         
         
-        // ---------- Profilo ApplicationChannel ----------
-        Map<String, Object> applicationChannel = new HashMap<>();
+        // ---------- Profilo SampleAppChannelEtcdRaft ----------
+        Map<String, Object> SampleAppChannelEtcdRaft = (Map<String,Object>) ((Map<String,Object>) data.get("Profiles")).get("SampleAppChannelEtcdRaft");
 
-        applicationChannel.put("Consortium", "SampleConsortium");
-
-        Map<String, Object> applicationSection = new HashMap<>();
+        SampleAppChannelEtcdRaft.put("Consortium", "SampleConsortium");
+        SampleAppChannelEtcdRaft.put("Consortiums","Consortiums:\r\n" + 
+                        "      SampleConsortium:\r\n" + 
+                        "        Organizations: [\r\n" + 
+                        "          ]");
+        Map<String, Object> SectionOrderer = (Map<String,Object>) SampleAppChannelEtcdRaft.get("Orderer");
         host1 = new HashMap<>();
         host1.put("Name", "Host1MSP");
         host1.put("ID", "Host1MSP");
@@ -1917,13 +1994,21 @@ public class Blockchain {
         host3.put("MSPDir", path+"/"+mainDirectory + "/organizations/ordererOrganizations/Consenters/orderers/orderer3.example.com/msp");
         host3.put("Policies", createOrgPolicies("Host3MSP"));
 
-        List<Map<String,Object>> appOrgs = Arrays.asList(host1, host2, host3);
-        applicationSection.put("Organizations", appOrgs);
+        //List<Map<String,Object>> appOrgs = Arrays.asList(host1, host2, host3);
+        //applicationSection.put("Organizations", appOrgs);
 
-        applicationSection.put("Organizations", Arrays.asList(host1,host2,host3)); 
+        SectionOrderer.put("Organizations", Arrays.asList(host1,host2,host3)); 
+        
+        //SampleAppChannelEtcdRaft.put("Organizations", Arrays.asList(host1,host2,host3));
         
         
-        
+        Map<String, Object> SectionApplication=(Map<String, Object>) SampleAppChannelEtcdRaft.get("Application");
+        HashMap<String,Object> Org = new HashMap<>();
+        Org.put("Name", "Org1");
+        Org.put("ID", "Org1");
+        Org.put("MSPDir", path+"/"+mainDirectory + "/organizations/peerOrganizations/org1.example.com/msp");
+        Org.put("Policies", createOrgPolicies("Org1"));
+        SectionApplication.put("Organizations", Arrays.asList(Org));
 
         ordererSection.put("Organizations", ordererOrgs);
         
@@ -1968,11 +2053,11 @@ public class Blockchain {
         appPolicies.put("Writers", createOrdererPolicies(false).get("Writers"));
         appPolicies.put("Admins", createOrdererPolicies(false).get("Admins"));
 
-        applicationSection.put("Policies", appPolicies);
-        applicationChannel.put("Application", applicationSection);
+        //applicationSection.put("Policies", appPolicies);
+        //applicationChannel.put("Application", applicationSection);
 
         
-        profiles.put("ApplicationChannel", applicationChannel);
+        //profiles.put("ApplicationChannel", applicationChannel);
         // Assembla OrdererGenesis
         ordererGenesis.put("Policies", createOrdererPolicies(false));
         ordererGenesis.put("Consortiums", ordererGenesisConsortiums);
@@ -1990,7 +2075,7 @@ public class Blockchain {
         consortiums = new LinkedHashMap<>();
         consortiums.put("SampleConsortium", sampleConsortium);
 
-        SampleAppChannelEtcdRaft_profile.put("Consortiums", consortiums);
+        //data.put("Consortiums", consortiums);
 
         
         //Writing
@@ -2006,19 +2091,13 @@ public class Blockchain {
         }
         System.out.println("Config updated");
         Scanner in= new Scanner(System.in);
-        //CREAZIONE DEL GENESIS BLOCK
-        System.out.println("Channel name: ");
-        String channel_name=in.next();
-        executeWSLCommand("cp -r $(pwd)/"+mainDirectory+"/organizations/peerOrganizations/org1.example.com/msp $(pwd)/"+mainDirectory+"/bin");
-        executeWSLCommand("cd $(pwd)/"+mainDirectory+"/bin &&"
-                + "./configtxgen -configPath $(pwd)/"+mainDirectory+"/bin  -profile SampleAppChannelEtcdRaft -channelID "+channel_name+" -outputBlock ./genesis_block.pb");
-        
+            
         //avvio degli orderer orderer1.example.com, orderer2.example.com e orderer3.example.com
         
         //------------------HOST1------------------
         organizationAdminRegistrationEnroll("Consenters", false);
         createConfig_yaml("organizations/ordererOrganizations/"+"Consenters"+"/msp");
-        download_orderer_bin("orderer1.example.com");
+        copy_orderer_bin("orderer1.example.com");
         configure_orderer("orderer1.example.com","Consenters", true);
         //Copia del certificato dell'admin in admincerts
         executeWSLCommand("cp "+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/msp/signcerts/cert.pem "+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/msp/admincerts/");
@@ -2026,7 +2105,7 @@ public class Blockchain {
         
         
         //------------------HOST2------------------
-        download_orderer_bin("orderer2.example.com");
+        copy_orderer_bin("orderer2.example.com");
         configure_orderer("orderer2.example.com","Consenters", true);
         //Copia del certificato dell'admin in admincerts
         executeWSLCommand("cp "+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/orderer2.example.com/msp/signcerts/cert.pem "+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/orderer2.example.com/msp/admincerts/");
@@ -2034,41 +2113,91 @@ public class Blockchain {
         
         
         //------------------HOST3------------------
-        download_orderer_bin("orderer3.example.com");
+        copy_orderer_bin("orderer3.example.com");
         configure_orderer("orderer3.example.com","Consenters", true);
         //Copia del certificato dell'admin in admincerts
         executeWSLCommand("cp "+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/orderer3.example.com/msp/signcerts/cert.pem "+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/orderer3.example.com/msp/admincerts/");
         
         //------------------peer------------------
-        download_peer_bin("peer0.org1.example.com");
+        copy_peer_bin("peer0.org1.example.com");
         configure_peer_core("peer0.org1.example.com","org1.example.com");
         executeWSLCommand("mkdir "+mainDirectory+"/organizations/peerOrganizations/org1.example.com/users/Admin@org1.example.com"
                 + "mkdir "+mainDirectory+"/organizations/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp");
         organizationAdminRegistrationEnroll("org1.example.com", true);
+        
+        
         //Avvio del container
         addConsentersDocker();
         new ordererThread(mainDirectory);
         waitForContainer("orderer1.example.com");
         waitForContainer("orderer2.example.com");
         waitForContainer("orderer3.example.com");
+        
+        //CREAZIONE DEL GENESIS BLOCK
+        System.out.println("Channel name: ");
+        String channel_name=in.next();
+        
+        /*executeWSLCommand("cd "+mainDirectory+"/bin &&"
+                + "./configtxgen -profile SampleAppChannelEtcdRaft "
+                + "-outputCreateChannelTx "+channel_name+".tx "
+                + "-channelID "+channel_name);
+        executeWSLCommand("cp "+mainDirectory+"/bin/peer "+mainDirectory);
+        executeWSLCommand("export FABRIC_CFG_PATH=$(pwd)/"+mainDirectory+"/bin &&"
+                + "export CORE_PEER_MSPCONFIGPATH=$(pwd)/Prova/organizations/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp &&"                            
+                +"cd "+mainDirectory+" &&"
+                + "./peer channel create "
+                + "-c "+channel_name+" "
+                + "-f bin/"+channel_name+".tx "
+                + "-o orderer1.example.com:7050 "
+                + "--outputBlock bin/"+channel_name+"_block.pb "
+                + "--tls "
+                + "--cafile $(pwd)/"+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/tls/ca.crt");*/
+        executeWSLCommand("cp -r $(pwd)/"+mainDirectory+"/organizations/peerOrganizations/org1.example.com/msp $(pwd)/"+mainDirectory+"/bin");
+        executeWSLCommand("cd $(pwd)/"+mainDirectory+"/bin &&"
+                + "./configtxgen -configPath $(pwd)/"+mainDirectory+"/bin  -profile SampleAppChannelEtcdRaft -channelID "+channel_name+" -outputBlock ./"+channel_name+"_block.pb");
+    
+        
         executeWSLCommand("cd "+mainDirectory+" &&"
                                 + "mv fabric-ca-client/tls-ca/tlsadmin/msp/keystore/*_sk fabric-ca-client/tls-ca/tlsadmin/msp/keystore/key.pem");
         executeWSLCommand("cp "+mainDirectory+"/bin/osnadmin "+mainDirectory);
                         
         //Comando per aggungere l'orderer orderer1.example.com al canale
         executeWSLCommand("cd "+mainDirectory+" &&"
-                        + "./osnadmin channel join --channelID "+channel_name+" --config-block bin/genesis_block.pb -o orderer1.example.com:9443 --ca-file organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/tls/ca.crt --client-cert organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/tls/server.crt --client-key organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/tls/server.key");
+                        + "./osnadmin channel join "
+                        + "--channelID "+channel_name+" "
+                        + "--config-block bin/"+channel_name+"_block.pb "
+                        + "--orderer-address orderer1.example.com:9443 "
+                        + "--ca-file organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/tls/ca.crt "
+                        + "--client-cert organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/tlsclient/client.crt "
+                        + "--client-key organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/tlsclient/client.key");
         //Comando per aggungere l'orderer orderer2.example.com al canale
         executeWSLCommand("cd "+mainDirectory+" &&"
-                        + "./osnadmin channel join --channelID "+channel_name+" --config-block bin/genesis_block.pb -o orderer2.example.com:9444 --ca-file organizations/ordererOrganizations/Consenters/orderers/orderer2.example.com/tls/ca.crt --client-cert organizations/ordererOrganizations/Consenters/orderers/orderer2.example.com/tls/server.crt --client-key organizations/ordererOrganizations/Consenters/orderers/orderer2.example.com/tls/server.key");
-        
+                        + "./osnadmin channel join "
+                        + "--channelID "+channel_name+" "
+                        + "--config-block bin/"+channel_name+"_block.pb "
+                        + "--orderer-address orderer2.example.com:9444 "
+                        + "--ca-file organizations/ordererOrganizations/Consenters/orderers/orderer2.example.com/tls/ca.crt "
+                        + "--client-cert organizations/ordererOrganizations/Consenters/orderers/orderer2.example.com/tlsclient/client.crt "
+                        + "--client-key organizations/ordererOrganizations/Consenters/orderers/orderer2.example.com/tlsclient/client.key");
+             
         //Comando per aggungere l'orderer orderer3.example.com al canale
         executeWSLCommand("cd "+mainDirectory+" &&"
-                        + "./osnadmin channel join --channelID "+channel_name+" --config-block bin/genesis_block.pb -o orderer3.example.com:9445 --ca-file organizations/ordererOrganizations/Consenters/orderers/orderer3.example.com/tls/ca.crt --client-cert organizations/ordererOrganizations/Consenters/orderers/orderer3.example.com/tls/server.crt --client-key organizations/ordererOrganizations/Consenters/orderers/orderer3.example.com/tls/server.key");
-        
+                        + "./osnadmin channel join "
+                        + "--channelID "+channel_name+" "
+                        + "--config-block bin/"+channel_name+"_block.pb "
+                        + "--orderer-address orderer3.example.com:9445 "
+                        + "--ca-file organizations/ordererOrganizations/Consenters/orderers/orderer3.example.com/tls/ca.crt "
+                        + "--client-cert organizations/ordererOrganizations/Consenters/orderers/orderer3.example.com/tlsclient/client.crt "
+                        + "--client-key organizations/ordererOrganizations/Consenters/orderers/orderer3.example.com/tlsclient/client.key");
+        //Aggiunta peer
+        executeWSLCommand("export CORE_PEER_LOCALMSPID=SampleOrg && "
+                        + "export CORE_PEER_MSPCONFIGPATH=$(pwd)/"+mainDirectory+"/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/msp && "
+                        + "export CORE_PEER_ADDRESS=peer0.org1.example.com:7051 && "
+                        + "cd "+mainDirectory+" && "
+                        + "./peer channel join -b bin/"+channel_name+"_block.pb");
         //Riavvio dei container
         
-        executeWSLCommand("cd "+mainDirectory+" && "
+        /*executeWSLCommand("cd "+mainDirectory+" && "
                 + "docker restart orderer1.example.com");
         
         executeWSLCommand("cd "+mainDirectory+" && "
@@ -2080,6 +2209,7 @@ public class Blockchain {
         executeWSLCommand("cp "+mainDirectory+"/bin/peer "+mainDirectory);
         executeWSLCommand("cp "+mainDirectory+"/bin/configtxlator "+mainDirectory);
         channelUpdate(channel_name,"org1.example.com","peer0.org1.example.com");
+        
         
         executeWSLCommand("cd "+mainDirectory+" &&"
                             + "export CORE_PEER_LOCALMSPID=Org3MSP &&"
@@ -2100,7 +2230,7 @@ public class Blockchain {
                         + "--ordererTLSHostnameOverride orderer1.example.com "
                         + "--tls --cafile /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/BlockchianProject/organizations/ordererOrganizations/example.com/orderers/orderer1.example.com/tls/ca.crt "
                         + "-c channel1 &&"
-                            + "./peer channel join -b channel1.block");
+                            + "./peer channel join -b channel1.block");*/
         
         return channel_name;
     }
@@ -2161,7 +2291,7 @@ public class Blockchain {
      */
     private static void downloadBinForGenesisBlock(){
         executeWSLCommand("cd $(pwd)/"+mainDirectory+"/bin &&"
-                + "curl -L https://github.com/hyperledger/fabric/releases/download/v2.5.0/hyperledger-fabric-linux-amd64-2.5.0.tar.gz -o fabric-bin.tar.gz &&"
+                + "aria2c https://github.com/hyperledger/fabric/releases/download/v2.5.0/hyperledger-fabric-linux-amd64-2.5.0.tar.gz -o fabric-bin.tar.gz &&"
                 + "tar -xvzf fabric-bin.tar.gz --strip-components=1");
     }
     
