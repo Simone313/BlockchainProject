@@ -1,0 +1,206 @@
+Organizations:
+- Name: org1.example.com
+  SkipAsForeign: false
+  ID: org1.example.com
+  MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/peerOrganizations/org1.example.com/msp
+  Policies:
+    Writers:
+      Type: Signature
+      Rule: OR('org1.example.com.member')
+    Admins:
+      Type: Signature
+      Rule: OR('org1.example.com.admin')
+    Readers:
+      Type: Signature
+      Rule: OR('org1.example.com.member')
+  OrdererEndpoints:
+  - 127.0.0.1:7050
+  AnchorPeers:
+  - Host: 127.0.0.1
+    Port: 7051
+- &id001
+  Policies:
+    Writers:
+      Type: Signature
+      Rule: OR('Consenters.member')
+    Admins:
+      Type: Signature
+      Rule: OR('Consenters.admin')
+    Readers:
+      Type: Signature
+      Rule: OR('Consenters.member')
+  OrdererEndpoints:
+  - orderer1.example.com:7080
+  ID: Consenters
+  Name: Consenters
+  MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/ordererOrganizations/Consenters/msp
+Capabilities:
+  Channel:
+    V2_0: true
+  Orderer:
+    V2_0: true
+  Application:
+    V2_0: true
+Application:
+  ACLs:
+    _lifecycle/CheckCommitReadiness: /Channel/Application/Writers
+    _lifecycle/CommitChaincodeDefinition: /Channel/Application/Writers
+    _lifecycle/QueryChaincodeDefinition: /Channel/Application/Writers
+    _lifecycle/QueryChaincodeDefinitions: /Channel/Application/Writers
+    lscc/ChaincodeExists: /Channel/Application/Readers
+    lscc/GetDeploymentSpec: /Channel/Application/Readers
+    lscc/GetChaincodeData: /Channel/Application/Readers
+    lscc/GetInstantiatedChaincodes: /Channel/Application/Readers
+    qscc/GetChainInfo: /Channel/Application/Readers
+    qscc/GetBlockByNumber: /Channel/Application/Readers
+    qscc/GetBlockByHash: /Channel/Application/Readers
+    qscc/GetTransactionByID: /Channel/Application/Readers
+    qscc/GetBlockByTxID: /Channel/Application/Readers
+    cscc/GetConfigBlock: /Channel/Application/Readers
+    cscc/GetChannelConfig: /Channel/Application/Readers
+    peer/Propose: /Channel/Application/Writers
+    peer/ChaincodeToChaincode: /Channel/Application/Writers
+    event/Block: /Channel/Application/Readers
+    event/FilteredBlock: /Channel/Application/Readers
+  Organizations: null
+  Policies:
+    LifecycleEndorsement:
+      Type: ImplicitMeta
+      Rule: MAJORITY Endorsement
+    Endorsement:
+      Type: ImplicitMeta
+      Rule: MAJORITY Endorsement
+    Readers:
+      Type: ImplicitMeta
+      Rule: ANY Readers
+    Writers:
+      Type: ImplicitMeta
+      Rule: ANY Writers
+    Admins:
+      Type: ImplicitMeta
+      Rule: MAJORITY Admins
+  Capabilities: &id010
+    V2_0: true
+Orderer:
+  OrdererType: etcdraft
+  Addresses: null
+  BatchTimeout: 2s
+  BatchSize: &id005
+    MaxMessageCount: 500
+    AbsoluteMaxBytes: 10 MB
+    PreferredMaxBytes: 2 MB
+  MaxChannels: 0
+  Kafka: &id006
+    Brokers:
+    - kafka0:9092
+    - kafka1:9092
+    - kafka2:9092
+  EtcdRaft: &id007
+    Consenters:
+    - ClientTLSCert: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/tlsclient/signcerts/cert.pem
+      Port: 7080
+      Host: orderer1.example.com
+      ServerTLSCert: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/tls/signcerts/cert.pem
+    Options:
+      TickInterval: 500ms
+      ElectionTick: 10
+      HeartbeatTick: 1
+      MaxInflightBlocks: 5
+      SnapshotIntervalSize: 16 MB
+  Organizations:
+  - *id001
+  Policies: &id008
+    Readers:
+      Type: ImplicitMeta
+      Rule: ANY Readers
+    Writers:
+      Type: ImplicitMeta
+      Rule: ANY Writers
+    Admins:
+      Type: ImplicitMeta
+      Rule: MAJORITY Admins
+    BlockValidation:
+      Type: ImplicitMeta
+      Rule: ANY Writers
+  Capabilities: &id009
+    V2_0: true
+  addresses: &id004
+  - orderer1.example.com:7080
+Channel:
+  Policies: &id002
+    Readers:
+      Type: ImplicitMeta
+      Rule: ANY Readers
+    Writers:
+      Type: ImplicitMeta
+      Rule: ANY Writers
+    Admins:
+      Type: ImplicitMeta
+      Rule: MAJORITY Admins
+  Capabilities: &id003
+    V2_0: true
+Profiles:
+  SampleAppChannelEtcdRaft:
+    Policies: *id002
+    Capabilities: *id003
+    Orderer: &id013
+      OrdererType: etcdraft
+      Addresses: *id004
+      BatchTimeout: 2s
+      BatchSize: *id005
+      MaxChannels: 0
+      Kafka: *id006
+      EtcdRaft: *id007
+      Organizations:
+      - Policies:
+          Writers:
+            Type: Signature
+            Rule: OR('Host1MSP.member')
+          Admins:
+            Type: Signature
+            Rule: OR('Host1MSP.admin')
+          Readers:
+            Type: Signature
+            Rule: OR('Host1MSP.member')
+        ID: Host1MSP
+        Name: Host1MSP
+        MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/msp
+      Policies: *id008
+      Capabilities: *id009
+    Application: &id012
+      Organizations:
+      - &id011
+        Policies:
+          Writers:
+            Type: Signature
+            Rule: OR('org1.example.com.member')
+          Admins:
+            Type: Signature
+            Rule: OR('org1.example.com.admin')
+          Readers:
+            Type: Signature
+            Rule: OR('org1.example.com.member')
+        ID: org1.example.com
+        Name: org1.example.com
+        MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/peerOrganizations/org1.example.com/msp
+      Policies:
+        Writers:
+          Type: ImplicitMeta
+          Rule: ANY Writers
+        Admins:
+          Type: ImplicitMeta
+          Rule: MAJORITY Admins
+        Readers:
+          Type: ImplicitMeta
+          Rule: ANY Readers
+      Capabilities: *id010
+    Consortium: SampleConsortium
+  OrdererGenesis:
+    Policies: *id002
+    Consortiums:
+      SampleConsortium:
+        Organizations:
+        - *id011
+    Application: *id012
+    Capabilities: *id003
+    Orderer: *id013
