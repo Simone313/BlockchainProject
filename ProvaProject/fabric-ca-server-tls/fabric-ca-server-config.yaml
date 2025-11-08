@@ -24,9 +24,9 @@ crl:
 registry:
   maxenrollments: -1
   identities:
-  - name: admin
-    pass: adminPsw
-    type: client
+  - name: Admin@org1
+    pass: Admin@org1Psw
+    type: admin
     affiliation: ''
     attrs:
       hf.Registrar.Roles: '*'

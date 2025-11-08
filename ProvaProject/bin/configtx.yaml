@@ -1,28 +1,29 @@
 Organizations:
-- Name: org1.example.com
+- &id001
+  Name: org1
   SkipAsForeign: false
-  ID: org1.example.com
-  MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/peerOrganizations/org1.example.com/msp
+  ID: org1
+  MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/peerOrganizations/org1/msp
   Policies:
     Writers:
       Type: Signature
-      Rule: OR('org1.example.com.member')
+      Rule: OR('org1.admin')
     Admins:
       Type: Signature
-      Rule: OR('org1.example.com.admin')
+      Rule: OR('org1.admin')
     Readers:
       Type: Signature
-      Rule: OR('org1.example.com.member')
+      Rule: OR('org1.member')
   OrdererEndpoints:
   - 127.0.0.1:7050
   AnchorPeers:
   - Host: 127.0.0.1
     Port: 7051
-- &id001
+- &id002
   Policies:
     Writers:
       Type: Signature
-      Rule: OR('Consenters.member')
+      Rule: OR('Consenters.admin')
     Admins:
       Type: Signature
       Rule: OR('Consenters.admin')
@@ -62,7 +63,8 @@ Application:
     peer/ChaincodeToChaincode: /Channel/Application/Writers
     event/Block: /Channel/Application/Readers
     event/FilteredBlock: /Channel/Application/Readers
-  Organizations: null
+  Organizations:
+  - *id001
   Policies:
     LifecycleEndorsement:
       Type: ImplicitMeta
@@ -79,23 +81,23 @@ Application:
     Admins:
       Type: ImplicitMeta
       Rule: MAJORITY Admins
-  Capabilities: &id010
+  Capabilities: &id011
     V2_0: true
 Orderer:
   OrdererType: etcdraft
   Addresses: null
   BatchTimeout: 2s
-  BatchSize: &id005
+  BatchSize: &id006
     MaxMessageCount: 500
     AbsoluteMaxBytes: 10 MB
     PreferredMaxBytes: 2 MB
   MaxChannels: 0
-  Kafka: &id006
+  Kafka: &id007
     Brokers:
     - kafka0:9092
     - kafka1:9092
     - kafka2:9092
-  EtcdRaft: &id007
+  EtcdRaft: &id008
     Consenters:
     - ClientTLSCert: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/tlsclient/signcerts/cert.pem
       Port: 7080
@@ -108,8 +110,8 @@ Orderer:
       MaxInflightBlocks: 5
       SnapshotIntervalSize: 16 MB
   Organizations:
-  - *id001
-  Policies: &id008
+  - *id002
+  Policies: &id009
     Readers:
       Type: ImplicitMeta
       Rule: ANY Readers
@@ -122,12 +124,12 @@ Orderer:
     BlockValidation:
       Type: ImplicitMeta
       Rule: ANY Writers
-  Capabilities: &id009
+  Capabilities: &id010
     V2_0: true
-  addresses: &id004
+  addresses: &id005
   - orderer1.example.com:7080
 Channel:
-  Policies: &id002
+  Policies: &id003
     Readers:
       Type: ImplicitMeta
       Rule: ANY Readers
@@ -137,52 +139,40 @@ Channel:
     Admins:
       Type: ImplicitMeta
       Rule: MAJORITY Admins
-  Capabilities: &id003
+  Capabilities: &id004
     V2_0: true
 Profiles:
   SampleAppChannelEtcdRaft:
-    Policies: *id002
-    Capabilities: *id003
-    Orderer: &id013
+    Policies: *id003
+    Capabilities: *id004
+    Orderer: &id014
       OrdererType: etcdraft
-      Addresses: *id004
+      Addresses: *id005
       BatchTimeout: 2s
-      BatchSize: *id005
+      BatchSize: *id006
       MaxChannels: 0
-      Kafka: *id006
-      EtcdRaft: *id007
+      Kafka: *id007
+      EtcdRaft: *id008
       Organizations:
-      - Policies:
-          Writers:
-            Type: Signature
-            Rule: OR('Host1MSP.member')
-          Admins:
-            Type: Signature
-            Rule: OR('Host1MSP.admin')
-          Readers:
-            Type: Signature
-            Rule: OR('Host1MSP.member')
-        ID: Host1MSP
-        Name: Host1MSP
-        MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/msp
-      Policies: *id008
-      Capabilities: *id009
-    Application: &id012
+      - *id001
+      Policies: *id009
+      Capabilities: *id010
+    Application: &id013
       Organizations:
-      - &id011
+      - &id012
         Policies:
           Writers:
             Type: Signature
-            Rule: OR('org1.example.com.member')
+            Rule: OR('org1.admin')
           Admins:
             Type: Signature
-            Rule: OR('org1.example.com.admin')
+            Rule: OR('org1.admin')
           Readers:
             Type: Signature
-            Rule: OR('org1.example.com.member')
-        ID: org1.example.com
-        Name: org1.example.com
-        MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/peerOrganizations/org1.example.com/msp
+            Rule: OR('org1.member')
+        ID: org1
+        Name: org1
+        MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/peerOrganizations/org1/msp
       Policies:
         Writers:
           Type: ImplicitMeta
@@ -193,14 +183,14 @@ Profiles:
         Readers:
           Type: ImplicitMeta
           Rule: ANY Readers
-      Capabilities: *id010
+      Capabilities: *id011
     Consortium: SampleConsortium
   OrdererGenesis:
-    Policies: *id002
+    Policies: *id003
     Consortiums:
       SampleConsortium:
         Organizations:
-        - *id011
-    Application: *id012
-    Capabilities: *id003
-    Orderer: *id013
+        - *id012
+    Application: *id013
+    Capabilities: *id004
+    Orderer: *id014
