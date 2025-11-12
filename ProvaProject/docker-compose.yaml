@@ -51,9 +51,9 @@ services:
       - ORDERER_GENERAL_CLUSTER_TLS_ENABLED=true
       - ORDERER_GENERAL_CLUSTER_TLS_CLIENTAUTHREQUIRED=false
       - ORDERER_GENERAL_CLUSTER_SERVERCERTIFICATE=/var/hyperledger/orderer/tls/signcerts/cert.pem
-      - ORDERER_GENERAL_CLUSTER_SERVERPRIVATEKEY=/var/hyperledger/orderer/tls/keystore/d2cc1c043f45fb98d800ba8d07c41c9fd0422e2b02b657ddc2508347017eea36_sk
+      - ORDERER_GENERAL_CLUSTER_SERVERPRIVATEKEY=/var/hyperledger/orderer/tls/keystore/26d0b9adda1cefaed0380c4b52357226f45d9ae5c970085cd5d1325ba59e5159_sk
       - ORDERER_GENERAL_CLUSTER_CLIENTCERTIFICATE=/var/hyperledger/orderer/tlsclient/signcerts/cert.pem
-      - ORDERER_GENERAL_CLUSTER_CLIENTPRIVATEKEY=/var/hyperledger/orderer/tlsclient/keystore/5388f73dfa60ed3393f7e03a9303e3f5d060e624b91d560de4a13c80afb4b464_sk
+      - ORDERER_GENERAL_CLUSTER_CLIENTPRIVATEKEY=/var/hyperledger/orderer/tlsclient/keystore/448c7bdb5f7f148ca8fd9a8c56cebeb61222c49e450d7b1bd2460b76c3c65f23_sk
       - ORDERER_GENERAL_CLUSTER_ROOTCAS=/var/hyperledger/orderer/tls/tlscacerts/tls-127-0-0-1-7054.pem
       # MSP
       - ORDERER_GENERAL_LOCALMSPID=Consenters
@@ -62,7 +62,7 @@ services:
       # TLS
       - ORDERER_GENERAL_TLS_ENABLED=false 
       - ORDERER_GENERAL_TLS_CLIENTAUTHREQUIRED=false
-      - ORDERER_GENERAL_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/keystore/d2cc1c043f45fb98d800ba8d07c41c9fd0422e2b02b657ddc2508347017eea36_sk
+      - ORDERER_GENERAL_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/keystore/26d0b9adda1cefaed0380c4b52357226f45d9ae5c970085cd5d1325ba59e5159_sk
       - ORDERER_GENERAL_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/signcerts/cert.pem
       - ORDERER_GENERAL_TLS_ROOTCAS=/var/hyperledger/orderer/tls/tlscacerts/tls-127-0-0-1-7054.pem
 
@@ -72,7 +72,7 @@ services:
       # Admin service
       - ORDERER_ADMIN_LISTENADDRESS=orderer1.example.com:9443
       - ORDERER_ADMIN_TLS_ENABLED=true
-      - ORDERER_ADMIN_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/keystore/d2cc1c043f45fb98d800ba8d07c41c9fd0422e2b02b657ddc2508347017eea36_sk
+      - ORDERER_ADMIN_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/keystore/26d0b9adda1cefaed0380c4b52357226f45d9ae5c970085cd5d1325ba59e5159_sk
       - ORDERER_ADMIN_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/signcerts/cert.pem
       - ORDERER_ADMIN_TLS_CLIENTAUTHREQUIRED=true
       - ORDERER_ADMIN_TLS_CLIENTROOTCAS=/var/hyperledger/orderer/tls/tlscacerts/tls-127-0-0-1-7054.pem
@@ -105,8 +105,7 @@ services:
     container_name: peer0.org1
     image: hyperledger/fabric-peer:2.5
     environment:
-      - FABRIC_CFG_PATH=/etc/hyperledger/fabric/config
-      - CORE_PEER_MSPCONFIGPATH=/var/hyperledger/peer/msp
+      - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/msp
       - CORE_PEER_ID=peer0.org1
       - CORE_PEER_ADDRESS=peer0.org1:7051
       - CORE_PEER_LISTENADDRESS=0.0.0.0:7051
@@ -119,9 +118,9 @@ services:
 
       # TLS
       - CORE_PEER_TLS_ENABLED=true
-      - CORE_PEER_TLS_CERT_FILE=/var/hyperledger/peer/tls/signcerts/cert.pem
-      - CORE_PEER_TLS_KEY_FILE=/var/hyperledger/peer/tls/keystore/2a92405ef544953d4c85630371e804fc336c1e6cbf28a44eeb52f1276c1eb6bc_sk
-      - CORE_PEER_TLS_ROOTCERT_FILE=/var/hyperledger/peer/tls/tlscacerts/tls-127-0-0-1-7054.pem
+      - CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/tls/signcerts/cert.pem
+      - CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/tls/keystore/3828a20d27e795d3605fbccc6e4aa2da71031b62b2ecaf35ff1541a8b0611514_sk
+      - CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/tls/tlscacerts/tls-127-0-0-1-7054.pem
 
     working_dir: /opt/gopath/src/github.com/hyperledger/fabric/peer
     command: peer node start
@@ -129,8 +128,7 @@ services:
       - 7051:7051
       - 9446:9446
     volumes:
-      - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/peerOrganizations/org1/users/Admin@org1/msp:/var/hyperledger/peer/msp
-      - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/peerOrganizations/org1/peers/peer0.org1/tls:/var/hyperledger/peer/tls
-      - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/peers_bin/peer0.org1/config:/etc/hyperledger/fabric/config
+      - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/peerOrganizations/org1/users/Admin@org1/msp:/etc/hyperledger/fabric/msp
+      - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/peerOrganizations/org1/peers/peer0.org1/tls:/etc/hyperledger/fabric/tls
     networks:
       - fabric_network

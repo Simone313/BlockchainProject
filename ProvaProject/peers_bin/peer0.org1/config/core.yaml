@@ -72,7 +72,7 @@ peer:
     cert:
       file: /etc/hyperledger/fabric/tls/signcerts/cert.pem
     key:
-      file: /etc/hyperledger/fabric/tls/keystore/2a92405ef544953d4c85630371e804fc336c1e6cbf28a44eeb52f1276c1eb6bc_sk
+      file: /etc/hyperledger/fabric/tls/keystore/3828a20d27e795d3605fbccc6e4aa2da71031b62b2ecaf35ff1541a8b0611514_sk
     rootcert:
       file: /etc/hyperledger/fabric/tls/tlscacerts/tls-127-0-0-1-7054.pem
     clientRootCAs:
