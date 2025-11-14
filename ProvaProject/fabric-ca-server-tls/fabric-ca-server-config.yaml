@@ -24,8 +24,8 @@ crl:
 registry:
   maxenrollments: -1
   identities:
-  - name: Admin@org1
-    pass: Admin@org1Psw
+  - name: Admin@Consenters
+    pass: Admin@ConsentersPsw
     type: admin
     affiliation: ''
     attrs:

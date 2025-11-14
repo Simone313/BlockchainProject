@@ -22,12 +22,16 @@ public class peerThread extends Thread {
     public void run(){
         Blockchain.executeWSLCommand("cd "+mainDir+" && docker compose down");
 
-        // Avvia solo CouchDB
-        Blockchain.executeWSLCommand("cd "+mainDir+" && docker compose up -d couchdb");
+        
 
         if (couchDB) {
+            // Avvia solo CouchDB
+            Blockchain.executeWSLCommand("cd "+mainDir+" && docker compose up -d couchdb");
             Blockchain.waitForContainer("couchdb"); // deve controllare lo stato health
             // Ora avvia il peer
+            Blockchain.executeWSLCommand("cd "+mainDir+" && docker compose up -d ");
+        }else{
+            // Avvia solo il peer
             Blockchain.executeWSLCommand("cd "+mainDir+" && docker compose up -d ");
         }
     }

@@ -1,9 +1,9 @@
 Organizations:
 - &id001
-  Name: org1
+  Name: peerOrg
   SkipAsForeign: false
-  ID: org1
-  MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/peerOrganizations/org1/msp
+  ID: peerOrg
+  MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/peerOrganizations/peerOrg/msp
   Policies:
     Writers:
       Type: ImplicitMeta
