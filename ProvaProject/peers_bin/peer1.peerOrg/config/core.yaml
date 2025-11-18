@@ -1,8 +1,8 @@
 peer:
-  id: peer1.peerOrg
+  id: peer1.peerOrgMSP
   networkId: dev
-  listenAddress: 0.0.0.0:7052
-  address: peer1.peerOrg:7052
+  listenAddress: 0.0.0.0:7051
+  address: peer1.peerOrg:7051
   addressAutoDetect: false
   gateway:
     enabled: true
@@ -64,19 +64,17 @@ peer:
   tls:
     enabled: true
     clientAuthRequired: true
-    cert:
+    cert: &id002
       file: /etc/hyperledger/fabric/tls/signcerts/cert.pem
-    key:
-      file: /etc/hyperledger/fabric/tls/keystore/47650625c13a0e5a6ffa516c6f729bce2836dca640d28cc82b7ba854f7347ab4_sk
+    key: &id001
+      file: /etc/hyperledger/fabric/tls/keystore/3635c1297483e46b83f4cb4e8a2395d1b6550820f964b6702a1b85e82f3ab589_sk
     rootcert:
       file: /etc/hyperledger/fabric/tls/tlscacerts/tls-127-0-0-1-7054.pem
     clientRootCAs:
       files:
       - /etc/hyperledger/fabric/tls/tlscacerts/tls-127-0-0-1-7054.pem
-    clientKey:
-      file: null
-    clientCert:
-      file: null
+    clientKey: *id001
+    clientCert: *id002
   authentication:
     timewindow: 15m
   fileSystemPath: /var/hyperledger/production/peer1.peerOrg
@@ -140,8 +138,8 @@ peer:
       gatewayService: 500
   maxRecvMsgSize: 104857600
   maxSendMsgSize: 104857600
-  chaincodeListenAddress: 0.0.0.0:7053
-  chaincodeAddress: peer1.peerOrg:7052
+  chaincodeListenAddress: 0.0.0.0:7052
+  chaincodeAddress: peer1.peerOrg:7051
   chaincode:
     externalBuilders: null
 vm:
@@ -230,7 +228,7 @@ ledger:
   snapshots:
     rootDir: /var/hyperledger/production/snapshots
 operations:
-  listenAddress: 127.0.0.1:7053
+  listenAddress: 127.0.0.1:7052
   tls:
     enabled: false
 metrics:

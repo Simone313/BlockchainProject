@@ -81,25 +81,25 @@ Application:
     Admins:
       Type: ImplicitMeta
       Rule: MAJORITY Admins
-  Capabilities: &id004
+  Capabilities: &id010
     V2_0: true
 Orderer:
   OrdererType: solo
   Addresses: null
   BatchTimeout: 2s
-  BatchSize: &id007
+  BatchSize: &id006
     MaxMessageCount: 500
     AbsoluteMaxBytes: 10 MB
     PreferredMaxBytes: 2 MB
   MaxChannels: 0
-  Kafka: &id008
+  Kafka: &id007
     Brokers:
     - kafka0:9092
     - kafka1:9092
     - kafka2:9092
   Organizations:
   - *id002
-  Policies: &id009
+  Policies: &id008
     Readers:
       Type: ImplicitMeta
       Rule: ANY Readers
@@ -112,9 +112,9 @@ Orderer:
     BlockValidation:
       Type: ImplicitMeta
       Rule: ANY Writers
-  Capabilities: &id010
+  Capabilities: &id009
     V2_0: true
-  addresses: &id006
+  addresses: &id005
   - orderer1.example.com:7080
 Channel:
   Policies: &id003
@@ -127,16 +127,24 @@ Channel:
     Admins:
       Type: ImplicitMeta
       Rule: MAJORITY Admins
-  Capabilities: &id005
+  Capabilities: &id004
     V2_0: true
 Profiles:
-  OrdererGenesis:
+  SampleAppChannelEtcdRaft:
     Policies: *id003
-    Consortiums:
-      SampleConsortium:
-        Organizations:
-        - *id001
-    Application: &id012
+    Capabilities: *id004
+    Orderer: &id012
+      OrdererType: solo
+      Addresses: *id005
+      BatchTimeout: 2s
+      BatchSize: *id006
+      MaxChannels: 0
+      Kafka: *id007
+      Organizations:
+      - *id001
+      Policies: *id008
+      Capabilities: *id009
+    Application: &id011
       Organizations:
       - *id001
       Policies:
@@ -149,22 +157,14 @@ Profiles:
         Readers:
           Type: ImplicitMeta
           Rule: ANY Readers
-      Capabilities: *id004
-    Capabilities: *id005
-    Orderer: &id011
-      OrdererType: solo
-      Addresses: *id006
-      BatchTimeout: 2s
-      BatchSize: *id007
-      MaxChannels: 0
-      Kafka: *id008
-      Organizations:
-      - *id001
-      Policies: *id009
       Capabilities: *id010
-  SampleAppChannelEtcdRaft:
-    Policies: *id003
-    Capabilities: *id005
-    Orderer: *id011
-    Application: *id012
     Consortium: SampleConsortium
+  OrdererGenesis:
+    Policies: *id003
+    Consortiums:
+      SampleConsortium:
+        Organizations:
+        - *id001
+    Application: *id011
+    Capabilities: *id004
+    Orderer: *id012

@@ -47,20 +47,20 @@ services:
     - ORDERER_GENERAL_CLUSTER_TLS_ENABLED=true
     - ORDERER_GENERAL_CLUSTER_TLS_CLIENTAUTHREQUIRED=false
     - ORDERER_GENERAL_CLUSTER_SERVERCERTIFICATE=/var/hyperledger/orderer/tls/signcerts/cert.pem
-    - ORDERER_GENERAL_CLUSTER_SERVERPRIVATEKEY=/var/hyperledger/orderer/tls/keystore/a9cf667ab0e68e221d249cc405828e13dc249ff1146e603f9466c47bebecfb7c_sk
+    - ORDERER_GENERAL_CLUSTER_SERVERPRIVATEKEY=/var/hyperledger/orderer/tls/keystore/c3d0e2625b486429a4c80bd79b16733fa3f5846810045b032ed0383ae3703eaf_sk
     - ORDERER_GENERAL_CLUSTER_CLIENTCERTIFICATE=/var/hyperledger/orderer/tlsclient/signcerts/cert.pem
-    - ORDERER_GENERAL_CLUSTER_CLIENTPRIVATEKEY=/var/hyperledger/orderer/tlsclient/keystore/07c7bae7c812b244e7df7d4244d7f396b0fb379dec6db38a52895dda5d6ae5f2_sk
+    - ORDERER_GENERAL_CLUSTER_CLIENTPRIVATEKEY=/var/hyperledger/orderer/tlsclient/keystore/a007d113c0667ac8b2160ec46e1e1102756b78044ea6cedecac8697749923fa9_sk
     - ORDERER_GENERAL_CLUSTER_ROOTCAS=/var/hyperledger/orderer/tls/tlscacerts/tls-127-0-0-1-7054.pem
     - ORDERER_GENERAL_LOCALMSPID=Consenters
     - ORDERER_GENERAL_LOCALMSPDIR=/var/hyperledger/orderer/msp
     - ORDERER_GENERAL_TLS_ENABLED=false
     - ORDERER_GENERAL_TLS_CLIENTAUTHREQUIRED=false
-    - ORDERER_GENERAL_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/keystore/a9cf667ab0e68e221d249cc405828e13dc249ff1146e603f9466c47bebecfb7c_sk
+    - ORDERER_GENERAL_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/keystore/c3d0e2625b486429a4c80bd79b16733fa3f5846810045b032ed0383ae3703eaf_sk
     - ORDERER_GENERAL_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/signcerts/cert.pem
     - ORDERER_GENERAL_TLS_ROOTCAS=/var/hyperledger/orderer/tls/tlscacerts/tls-127-0-0-1-7054.pem
     - ORDERER_ADMIN_LISTENADDRESS=orderer1.example.com:9443
     - ORDERER_ADMIN_TLS_ENABLED=true
-    - ORDERER_ADMIN_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/keystore/a9cf667ab0e68e221d249cc405828e13dc249ff1146e603f9466c47bebecfb7c_sk
+    - ORDERER_ADMIN_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/keystore/c3d0e2625b486429a4c80bd79b16733fa3f5846810045b032ed0383ae3703eaf_sk
     - ORDERER_ADMIN_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/signcerts/cert.pem
     - ORDERER_ADMIN_TLS_CLIENTAUTHREQUIRED=true
     - ORDERER_ADMIN_TLS_CLIENTROOTCAS=/var/hyperledger/orderer/tls/tlscacerts/tls-127-0-0-1-7054.pem
@@ -87,22 +87,23 @@ services:
     container_name: peer1.peerOrg
     image: hyperledger/fabric-peer
     environment:
+    - FABRIC_CFG_PATH=/etc/hyperledger/fabric/config
     - CORE_PEER_ID=peer1.peerOrg
-    - CORE_PEER_ADDRESS=peer1.peerOrg:7052
-    - CORE_PEER_LISTENADDRESS=0.0.0.0:7052
-    - CORE_PEER_CHAINCODEADDRESS=peer1.peerOrg:7053
-    - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:7053
-    - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer1.peerOrg:7052
-    - CORE_PEER_GOSSIP_BOOTSTRAP=peer1.peerOrg:7052
+    - CORE_PEER_ADDRESS=peer1.peerOrg:7051
+    - CORE_PEER_LISTENADDRESS=0.0.0.0:7051
+    - CORE_PEER_CHAINCODEADDRESS=peer1.peerOrg:7052
+    - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:7052
+    - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer1.peerOrg:7051
+    - CORE_PEER_GOSSIP_BOOTSTRAP=peer1.peerOrg:7051
     - CORE_PEER_LOCALMSPID=guest
-    - CORE_OPERATIONS_LISTENADDRESS=0.0.0.0:7054
+    - CORE_OPERATIONS_LISTENADDRESS=0.0.0.0:7053
     - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/msp
     volumes:
     - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/peers_bin/peer1.peerOrg/config:/etc/hyperledger/fabric/config
     - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/peerOrganizations/peerOrg/users/Admin@peerOrg/msp:/etc/hyperledger/fabric/msp
     - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/peerOrganizations/peerOrg/peers/peer1.peerOrg/tls:/etc/hyperledger/fabric/tls
     ports:
-    - 7052
+    - 7051:7051
     networks:
     - fabric_network
     command: peer node start
@@ -110,22 +111,23 @@ services:
     container_name: peer2.peerOrg
     image: hyperledger/fabric-peer
     environment:
+    - FABRIC_CFG_PATH=/etc/hyperledger/fabric/config
     - CORE_PEER_ID=peer2.peerOrg
-    - CORE_PEER_ADDRESS=peer2.peerOrg:7053
-    - CORE_PEER_LISTENADDRESS=0.0.0.0:7053
-    - CORE_PEER_CHAINCODEADDRESS=peer2.peerOrg:7054
-    - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:7054
-    - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer2.peerOrg:7053
-    - CORE_PEER_GOSSIP_BOOTSTRAP=peer2.peerOrg:7053
+    - CORE_PEER_ADDRESS=peer2.peerOrg:7052
+    - CORE_PEER_LISTENADDRESS=0.0.0.0:7052
+    - CORE_PEER_CHAINCODEADDRESS=peer2.peerOrg:7053
+    - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:7053
+    - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer2.peerOrg:7052
+    - CORE_PEER_GOSSIP_BOOTSTRAP=peer2.peerOrg:7052
     - CORE_PEER_LOCALMSPID=guest
-    - CORE_OPERATIONS_LISTENADDRESS=0.0.0.0:7055
+    - CORE_OPERATIONS_LISTENADDRESS=0.0.0.0:7054
     - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/msp
     volumes:
     - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/peers_bin/peer2.peerOrg/config:/etc/hyperledger/fabric/config
     - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/peerOrganizations/peerOrg/users/Admin@peerOrg/msp:/etc/hyperledger/fabric/msp
     - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/peerOrganizations/peerOrg/peers/peer2.peerOrg/tls:/etc/hyperledger/fabric/tls
     ports:
-    - 7053
+    - 7052:7052
     networks:
     - fabric_network
     command: peer node start
