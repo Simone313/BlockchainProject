@@ -4,27 +4,7 @@
  */
 
 
-/*
-    Next steps
-    Blockchain networks are all about connection, so once you’ve deployed nodes, 
-    you’ll obviously want to connect them to other nodes! If you have a peer 
-    organization and a peer, you’ll want to join your organization to a consortium 
-    and join or Create a channel. If you have an ordering node, you will want to 
-    add peer organizations to your consortium. You’ll also want to learn how to 
-    develop chaincode, which you can learn about in the topics Smart Contracts 
-    and Chaincode and Writing Your First Chaincode.
 
-    Part of the process of connecting nodes and creating channels will involve 
-    modifying policies to fit the use cases of business networks. 
-    For more information about policies, check out Policies.
-
-    One of the common tasks in a Fabric will be the editing of existing channels. 
-    For a tutorial about that process, check out Updating a channel configuration. 
-    One popular channel update is to add an org to an existing channel. For a 
-    tutorial about that specific process, check out Adding an Org to a Channel. 
-    For information about upgrading nodes after they have been deployed, check 
-    out Upgrading your components.
-*/
 package com.blockchain.blockchain;
 
 /**
@@ -132,7 +112,16 @@ public class Blockchain {
                         String yourPin="simone03";
                         createDirectory(mainDirectory);
                         setupCA(yourPin);
-
+                        
+                        if(!check_go()){
+                            System.err.println("Go is not installed.\nInstalling Go...");
+                            try {
+                                installGo(yourPin);
+                            } catch (IOException | InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                            System.out.println("Go installed successfully.");
+                        }
                         executeWSLCommand("cd "+mainDirectory+" &&"
                                 + "mkdir peers_bin");
                         download_peer_bin();
@@ -253,11 +242,9 @@ public class Blockchain {
             // Leggo l'output (stdout + stderr)
             try (BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
                 String line;
-                System.out.println(GREEN);
                 while ((line = br.readLine()) != null) {
                     System.out.println(line);
                 }
-                System.out.println(RESET);
             }
             int exit = p.waitFor();
             System.out.println("Exit code: " + exit);
@@ -967,6 +954,8 @@ public class Blockchain {
                                 executeWSLCommand(dockerCmd);
 
                             }
+
+                            create_chaincode(channel_name, organization_name);
                             break;
                         }
                         default:{
@@ -1583,7 +1572,7 @@ public class Blockchain {
         }
         
         //Aggiunta del peer al file docker-compose.yaml
-        add_peer_to_docker(peer_name,cfgPath,mspPath,tlsPath,ports, cDB);
+        add_peer_to_docker(peer_name,org_name,cfgPath,mspPath,tlsPath,ports, cDB);
         
         System.out.println("Starting the peer...");
         new peerThread(peer_name, cDB, mainDirectory);
@@ -2170,7 +2159,7 @@ public class Blockchain {
      * @param couchDB true se il peer deve avere CouchDB associato
      * @throws IOException in caso di errori I/O
      */
-    private static void add_peer_to_docker(String peerName, String cfgPath, String mspPath, String tlsPath, LinkedList<Integer> ports, boolean couchDB) throws IOException{
+    private static void add_peer_to_docker(String peerName, String org_name, String cfgPath, String mspPath, String tlsPath, LinkedList<Integer> ports, boolean couchDB) throws IOException{
         Yaml yaml = new Yaml();
         File file = new File(mainDirectory + "/docker-compose.yaml");
 
@@ -3359,5 +3348,270 @@ public class Blockchain {
            }
         }
     }
+
+    private static void create_chaincode(String channelName, String org_name){
+        executeWSLCommand("cd "+mainDirectory+" &&"
+                + "mkdir atcc && cd atcc &&"
+                +" go mod init atcc &&"
+                +" touch atcc.go");
+        
+        System.out.println("Writing go code...");
+        writeChaincode();
+        System.out.println("Go code written successfully.");
+        
+        //Build chaincode
+        executeWSLCommand("cd "+mainDirectory+"/atcc &&"
+                + "go build -o simpleChaincode ./integration/chaincode/simple/cmd");
+        
+        //Start chaincode
+        executeWSLCommand("cd "+mainDirectory+"/atcc &&"
+                + "CORE_CHAINCODE_LOGLEVEL=debug && "
+                + "CORE_PEER_TLS_ENABLED=false && "
+                + "CORE_CHAINCODE_ID_NAME=mycc:1.0 && "
+                +"./simpleChaincode -peer.address 127.0.0.1:7052");
+        
+        //Approve and commit chaincode
+        executeWSLCommand("cd "+mainDirectory+" &&"
+                + "peer lifecycle chaincode approveformyorg  "
+                + "-o 127.0.0.1:7050 "
+                + "--channelID "+channelName+" "
+                + "--name mycc "
+                + "--version 1.0 " 
+                + "--sequence 1 "
+                + "--init-required " 
+                + "--signature-policy \"OR ('"+org_name+".member')\" "
+                + "--package-id mycc:1.0");
+        executeWSLCommand("cd "+mainDirectory+" &&"
+                +"peer lifecycle chaincode checkcommitreadiness "
+                +"-o 127.0.0.1:7050 "
+                +"--channelID "+channelName+" "
+                +"--name mycc "
+                +"--version 1.0 " 
+                +"--sequence 1 "
+                +"--init-required " 
+                +"--signature-policy \"OR ('"+org_name+".member')\"");
+        executeWSLCommand("cd "+mainDirectory+" &&"
+                +"peer lifecycle chaincode commit "
+                +"-o 127.0.0.1:7050 "
+                +"--channelID "+channelName+" "
+                +"--name mycc "
+                +"--version 1.0 " 
+                +"--sequence 1 "
+                +"--init-required " 
+                +"--signature-policy \"OR ('"+org_name+".member')\"");
+
+        //Invoke chaincode
+        executeWSLCommand("cd "+mainDirectory+" &&"
+                +"peer chaincode invoke "
+                +"-o 127.0.0.1:7050 -C "+channelName+" -n mycc -c '{\"Args\":[\"init\",\"a\",\"100\",\"b\",\"200\"]}' --isInit");
+    }
+
+    private static boolean check_go(){
+        String output= executeWSLCommandToString("go version");
+        if(output !=null && output.contains("go version")){
+            return true;
+        }
+        return false;
+    }
+
+    private static void installGo(String pin) throws IOException, InterruptedException{
+        ProcessBuilder pb = new ProcessBuilder(
+                "wsl.exe", "--", "sudo", "-S", "sh", "-c", "sudo apt install golang-go"
+            );
+
+            // opzionale: eredita env / o setta working dir locale
+            pb.redirectErrorStream(true); // unisce stderr a stdout
+
+            Process p = pb.start();
+
+            // SCRIVO la password su stdin del processo (sudo leggerà da stdin)
+            try (OutputStream os = p.getOutputStream()) {
+                os.write((pin + "\n").getBytes(StandardCharsets.UTF_8));
+                os.flush();
+                // non chiudere immediatamente se il processo può chiedere altro input; qui va bene chiudere
+            }
+
+            // Leggo l'output (stdout + stderr)
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    System.out.println(line);
+                }
+            }
+            int exit = p.waitFor();
+            System.out.println("Exit code: " + exit);
+    }
+
+    private static void writeChaincode(){
+        executeWSLCommand("cd "+mainDirectory+"/atcc &&"
+            + "echo 'package main\n"
+            + "\n"
+            + "import (\n"
+            + "\"fmt\"\n"
+            + "\"encoding/json\""
+            + "\"log\""
+            + "\"github.com/hyperledger/fabric-contract-api-go/contractapi\"\n"
+            + ")\n"
+            + "\n"
+            + "type SmartContract struct {\n"
+            + "    contractapi.Contract\n"
+            + "}\n"
+            + "type Asset struct {\n"
+            + "    AppraisedValue int `json:\"AppraisedValue\"`\n"
+            + "    Color string `json:\"Color\"`\n"
+            + "    ID string `json:\"ID\"`\n"
+            + "    Owner string `json:\"Owner\"`\n"
+            + "    Size int `json:\"Size\"`\n"
+            + "}\n"
+            + "func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) error {\n"
+            + "    assets := []Asset{\n"
+            + "        {ID: \"asset1\", Color: \"blue\", Size: 5, Owner: \"Tomoko\", AppraisedValue: 300},\n"
+            + "        {ID: \"asset2\", Color: \"red\", Size: 10, Owner: \"Brad\", AppraisedValue: 400},\n"
+            + "        {ID: \"asset3\", Color: \"green\", Size: 15, Owner: \"Jin Soo\", AppraisedValue: 500},\n"
+            + "        {ID: \"asset4\", Color: \"yellow\", Size: 20, Owner: \"Max\", AppraisedValue: 600},\n"
+            + "        {ID: \"asset5\", Color: \"black\", Size: 25, Owner: \"Adriana\", AppraisedValue: 700},\n"
+            + "        {ID: \"asset6\", Color: \"white\", Size: 30, Owner: \"Michelle\", AppraisedValue: 800},\n"
+            + "    }\n"
+            + "\n"
+            + "    for _, asset := range assets {\n"
+            + "        assetJSON, err := json.Marshal(asset)\n"
+            + "        if err != nil {\n"
+            + "            return err\n"
+            + "        }\n"
+            + "\n"
+            + "        err = ctx.GetStub().PutState(asset.ID, assetJSON)\n"
+            + "        if err != nil {\n"
+            + "            return fmt.Errorf(\"failed to put to world state. %v\", err)\n"
+            + "        }\n"
+            + "    }\n"
+            + "\n"
+            + "    return nil\n"
+            + "}\n"
+            + "func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface, id string, color string, size int, owner string, appraisedValue int) error {\n"
+            + "    exists, err := s.AssetExists(ctx, id)\n"
+            + "    if err != nil {\n"
+            + "        return err\n"
+            + "    }\n"
+            + "    if exists {\n"
+            + "        return fmt.Errorf(\"the asset %s already exists\", id)\n"
+            + "    }\n"
+            + "\n"
+            + "    asset := Asset{\n"
+            + "        ID: id,\n"
+            + "        Color: color,\n"
+            + "        Size: size,\n"
+            + "        Owner: owner,\n"
+            + "        AppraisedValue: appraisedValue,\n"
+            + "    }\n"
+            + "    assetJSON, err := json.Marshal(asset)\n"
+            + "    if err != nil {\n"
+            + "        return err\n"
+            + "    }\n"
+            + "\n"
+            + "    return ctx.GetStub().PutState(id, assetJSON)\n"
+            + "}\n"
+            + "func (s *SmartContract) ReadAsset(ctx contractapi.TransactionContextInterface, id string) (*Asset, error) {\n"
+            + "    assetJSON, err := ctx.GetStub().GetState(id)\n"
+            + "    if err != nil {\n"
+            + "        return nil, fmt.Errorf(\"failed to read from world state: %v\", err)\n"
+            + "    }\n"
+            + "    if assetJSON == nil {\n"
+            + "        return nil, fmt.Errorf(\"the asset %s does not exist\", id)\n"
+            + "    }\n"
+            + "\n"
+            + "    var asset Asset\n"
+            + "    err = json.Unmarshal(assetJSON, &asset)\n"
+            + "    if err != nil {\n"
+            + "        return nil, err\n"
+            + "    }\n"
+            + "\n"
+            + "    return &asset, nil\n"
+            + "}\n"
+            + "func (s *SmartContract) UpdateAsset(ctx contractapi.TransactionContextInterface, id string, color string, size int, owner string, appraisedValue int) error {\n"
+            + "    exists, err := s.AssetExists(ctx, id)\n"
+            + "    if err != nil {\n"
+            + "        return err\n"
+            + "    }\n"
+            + "    if !exists {\n"
+            + "        return fmt.Errorf(\"the asset %s does not exist\", id)\n"
+            + "    }\n"
+            + "\n"
+            + "    asset := Asset{\n"
+            + "        ID: id,\n"
+            + "        Color: color,\n"
+            + "        Size: size,\n"
+            + "        Owner: owner,\n"
+            + "        AppraisedValue: appraisedValue,\n"
+            + "    }\n"
+            + "    assetJSON, err := json.Marshal(asset)\n"
+            + "    if err != nil {\n"
+            + "        return err\n"
+            + "    }\n"
+            + "\n"
+            + "    return ctx.GetStub().PutState(id, assetJSON)\n"
+            + "}\n"
+            + "func (s *SmartContract) DeleteAsset(ctx contractapi.TransactionContextInterface, id string) error {\n"
+            + "    exists, err := s.AssetExists(ctx, id)\n"
+            + "    if err != nil {\n"
+            + "        return err\n"
+            + "    }\n"
+            + "    if !exists {\n"
+            + "        return fmt.Errorf(\"the asset %s does not exist\", id)\n"
+            + "    }\n"
+            + "\n"
+            + "    return ctx.GetStub().DelState(id)\n"
+            + "}\n"
+            + "func (s *SmartContract) AssetExists(ctx contractapi.TransactionContextInterface, id string) (bool, error) {\n"
+            + "    assetJSON, err := ctx.GetStub().GetState(id)\n"
+            + "    if err != nil {\n"
+            + "        return false, fmt.Errorf(\"failed to read from world state: %v\", err)\n"
+            + "    }\n"
+            + "\n"
+            + "    return assetJSON != nil, nil\n"
+            + "}\n"
+            + "func (s *SmartContract) TransferAsset(ctx contractapi.TransactionContextInterface, id string, newOwner string) error {\n"
+            + "    asset, err := s.ReadAsset(ctx, id)\n"
+            + "    if err != nil {\n"
+            + "        return err\n"
+            + "    }\n"
+            + "\n"
+            + "    asset.Owner = newOwner\n"
+            + "    assetJSON, err := json.Marshal(asset)\n"
+            + "    if err != nil {\n"
+            + "        return err\n"
+            + "    }\n"
+            + "\n"
+            + "    return ctx.GetStub().PutState(id, assetJSON)\n"
+            + "}\n"
+            + "func (s *SmartContract) GetAllAssets(ctx contractapi.TransactionContextInterface) ([]*Asset, error) {\n"
+            + "    resultsIterator, err := ctx.GetStub().GetStateByRange(\"\", \"\")\n"
+            + "    if err != nil {\n"
+            + "        return nil, err\n"
+            + "    }\n"
+            + "    defer resultsIterator.Close()\n"
+            + "\n"
+            + "    var assets []*Asset\n"
+            + "    for resultsIterator.HasNext() {\n"
+            + "        queryResponse, err := resultsIterator.Next()\n"
+            + "        if err != nil {\n"
+            + "            return nil, err\n"
+            + "        }\n"
+            + "\n"
+            + "        var asset Asset\n"
+            + "        err = json.Unmarshal(queryResponse.Value, &asset)\n"
+            + "        if err != nil {\n"
+            + "            return nil, err\n"
+            + "        }\n"
+            + "        assets = append(assets, &asset)\n"
+            + "    }\n"
+            + "\n"
+            + "    return assets, nil\n"
+            + "}\n"
+            + "' > atcc.go");
+    }
     
 }
+
+
+
+

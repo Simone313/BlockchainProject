@@ -47,20 +47,20 @@ services:
     - ORDERER_GENERAL_CLUSTER_TLS_ENABLED=true
     - ORDERER_GENERAL_CLUSTER_TLS_CLIENTAUTHREQUIRED=false
     - ORDERER_GENERAL_CLUSTER_SERVERCERTIFICATE=/var/hyperledger/orderer/tls/signcerts/cert.pem
-    - ORDERER_GENERAL_CLUSTER_SERVERPRIVATEKEY=/var/hyperledger/orderer/tls/keystore/c3d0e2625b486429a4c80bd79b16733fa3f5846810045b032ed0383ae3703eaf_sk
+    - ORDERER_GENERAL_CLUSTER_SERVERPRIVATEKEY=/var/hyperledger/orderer/tls/keystore/a3b1696947be84798068ff0bacc9c9b641cceb8f3bdfab9d77dd5c464f27c799_sk
     - ORDERER_GENERAL_CLUSTER_CLIENTCERTIFICATE=/var/hyperledger/orderer/tlsclient/signcerts/cert.pem
-    - ORDERER_GENERAL_CLUSTER_CLIENTPRIVATEKEY=/var/hyperledger/orderer/tlsclient/keystore/a007d113c0667ac8b2160ec46e1e1102756b78044ea6cedecac8697749923fa9_sk
+    - ORDERER_GENERAL_CLUSTER_CLIENTPRIVATEKEY=/var/hyperledger/orderer/tlsclient/keystore/d17cf9f06dd9143f5409fd904c3212018259d560dbb48f5df2480bed86696671_sk
     - ORDERER_GENERAL_CLUSTER_ROOTCAS=/var/hyperledger/orderer/tls/tlscacerts/tls-127-0-0-1-7054.pem
     - ORDERER_GENERAL_LOCALMSPID=Consenters
     - ORDERER_GENERAL_LOCALMSPDIR=/var/hyperledger/orderer/msp
     - ORDERER_GENERAL_TLS_ENABLED=false
     - ORDERER_GENERAL_TLS_CLIENTAUTHREQUIRED=false
-    - ORDERER_GENERAL_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/keystore/c3d0e2625b486429a4c80bd79b16733fa3f5846810045b032ed0383ae3703eaf_sk
+    - ORDERER_GENERAL_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/keystore/a3b1696947be84798068ff0bacc9c9b641cceb8f3bdfab9d77dd5c464f27c799_sk
     - ORDERER_GENERAL_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/signcerts/cert.pem
     - ORDERER_GENERAL_TLS_ROOTCAS=/var/hyperledger/orderer/tls/tlscacerts/tls-127-0-0-1-7054.pem
     - ORDERER_ADMIN_LISTENADDRESS=orderer1.example.com:9443
     - ORDERER_ADMIN_TLS_ENABLED=true
-    - ORDERER_ADMIN_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/keystore/c3d0e2625b486429a4c80bd79b16733fa3f5846810045b032ed0383ae3703eaf_sk
+    - ORDERER_ADMIN_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/keystore/a3b1696947be84798068ff0bacc9c9b641cceb8f3bdfab9d77dd5c464f27c799_sk
     - ORDERER_ADMIN_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/signcerts/cert.pem
     - ORDERER_ADMIN_TLS_CLIENTAUTHREQUIRED=true
     - ORDERER_ADMIN_TLS_CLIENTROOTCAS=/var/hyperledger/orderer/tls/tlscacerts/tls-127-0-0-1-7054.pem
@@ -95,7 +95,7 @@ services:
     - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:7052
     - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer1.peerOrg:7051
     - CORE_PEER_GOSSIP_BOOTSTRAP=peer1.peerOrg:7051
-    - CORE_PEER_LOCALMSPID=guest
+    - CORE_PEER_LOCALMSPID=peerOrg
     - CORE_OPERATIONS_LISTENADDRESS=0.0.0.0:7053
     - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/msp
     volumes:
@@ -119,7 +119,7 @@ services:
     - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:7053
     - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer2.peerOrg:7052
     - CORE_PEER_GOSSIP_BOOTSTRAP=peer2.peerOrg:7052
-    - CORE_PEER_LOCALMSPID=guest
+    - CORE_PEER_LOCALMSPID=peerOrg
     - CORE_OPERATIONS_LISTENADDRESS=0.0.0.0:7054
     - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/msp
     volumes:
