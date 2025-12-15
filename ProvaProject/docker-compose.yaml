@@ -44,26 +44,28 @@ services:
     - ORDERER_GENERAL_LISTENPORT=7050
     - ORDERER_GENERAL_CLUSTER_LISTENADDRESS=0.0.0.0
     - ORDERER_GENERAL_CLUSTER_LISTENPORT=7080
-    - ORDERER_GENERAL_CLUSTER_TLS_ENABLED=true
+    - ORDERER_GENERAL_CLUSTER_TLS_ENABLED=false
     - ORDERER_GENERAL_CLUSTER_TLS_CLIENTAUTHREQUIRED=false
     - ORDERER_GENERAL_CLUSTER_SERVERCERTIFICATE=/var/hyperledger/orderer/tls/signcerts/cert.pem
-    - ORDERER_GENERAL_CLUSTER_SERVERPRIVATEKEY=/var/hyperledger/orderer/tls/keystore/a3b1696947be84798068ff0bacc9c9b641cceb8f3bdfab9d77dd5c464f27c799_sk
+    - ORDERER_GENERAL_CLUSTER_SERVERPRIVATEKEY=/var/hyperledger/orderer/tls/keystore/3cabca2926d420b00987a0eee066cec9c08ccd2357598ec841c7266b8c7c03b1_sk
     - ORDERER_GENERAL_CLUSTER_CLIENTCERTIFICATE=/var/hyperledger/orderer/tlsclient/signcerts/cert.pem
-    - ORDERER_GENERAL_CLUSTER_CLIENTPRIVATEKEY=/var/hyperledger/orderer/tlsclient/keystore/d17cf9f06dd9143f5409fd904c3212018259d560dbb48f5df2480bed86696671_sk
-    - ORDERER_GENERAL_CLUSTER_ROOTCAS=/var/hyperledger/orderer/tls/tlscacerts/tls-127-0-0-1-7054.pem
+    - ORDERER_GENERAL_CLUSTER_CLIENTPRIVATEKEY=/var/hyperledger/orderer/tlsclient/keystore/35b944f2d08860ec9c60921b5621d919d3f77741ceee365a1c3a864f080edd45_sk
+    - ORDERER_GENERAL_CLUSTER_ROOTCAS=/var/hyperledger/orderer/tls/tls-ca-cert.pem
     - ORDERER_GENERAL_LOCALMSPID=Consenters
     - ORDERER_GENERAL_LOCALMSPDIR=/var/hyperledger/orderer/msp
     - ORDERER_GENERAL_TLS_ENABLED=false
     - ORDERER_GENERAL_TLS_CLIENTAUTHREQUIRED=false
-    - ORDERER_GENERAL_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/keystore/a3b1696947be84798068ff0bacc9c9b641cceb8f3bdfab9d77dd5c464f27c799_sk
+    - ORDERER_GENERAL_TLS_CLIENTROOTCAS=/var/hyperledger/orderer/tls/tls-ca-cert.pem
+    - ORDERER_GENERAL_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/keystore/3cabca2926d420b00987a0eee066cec9c08ccd2357598ec841c7266b8c7c03b1_sk
     - ORDERER_GENERAL_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/signcerts/cert.pem
-    - ORDERER_GENERAL_TLS_ROOTCAS=/var/hyperledger/orderer/tls/tlscacerts/tls-127-0-0-1-7054.pem
+    - ORDERER_GENERAL_TLS_ROOTCAS=/var/hyperledger/orderer/tls/tls-ca-cert.pem
     - ORDERER_ADMIN_LISTENADDRESS=orderer1.example.com:9443
-    - ORDERER_ADMIN_TLS_ENABLED=true
-    - ORDERER_ADMIN_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/keystore/a3b1696947be84798068ff0bacc9c9b641cceb8f3bdfab9d77dd5c464f27c799_sk
+    - ORDERER_ADMIN_TLS_ENABLED=false
+    - ORDERER_ADMIN_TLS_ROOTCAS=/var/hyperledger/orderer/tls/tls-ca-cert.pem
+    - ORDERER_ADMIN_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/keystore/3cabca2926d420b00987a0eee066cec9c08ccd2357598ec841c7266b8c7c03b1_sk
     - ORDERER_ADMIN_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/signcerts/cert.pem
-    - ORDERER_ADMIN_TLS_CLIENTAUTHREQUIRED=true
-    - ORDERER_ADMIN_TLS_CLIENTROOTCAS=/var/hyperledger/orderer/tls/tlscacerts/tls-127-0-0-1-7054.pem
+    - ORDERER_ADMIN_TLS_CLIENTAUTHREQUIRED=false
+    - ORDERER_ADMIN_TLS_CLIENTROOTCAS=/var/hyperledger/orderer/tls/tls-ca-cert.pem
     - ORDERER_CHANNELPARTICIPATION_ENABLED=true
     - ORDERER_GENERAL_GENESISFILE=/var/hyperledger/orderer/genesis_block/sys-channel_block.pb
     - ORDERER_GENERAL_BOOTSTRAPMETHOD=file
@@ -94,14 +96,26 @@ services:
     - CORE_PEER_CHAINCODEADDRESS=peer1.peerOrg:7052
     - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:7052
     - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer1.peerOrg:7051
-    - CORE_PEER_GOSSIP_BOOTSTRAP=peer1.peerOrg:7051
+    - CORE_PEER_GOSSIP_BOOTSTRAP=peer2.peerOrg:7052
     - CORE_PEER_LOCALMSPID=peerOrg
     - CORE_OPERATIONS_LISTENADDRESS=0.0.0.0:7053
     - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/msp
+    - CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/tls/tls-ca-cert.pem
+    - CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/tls/signcerts/cert.pem
+    - CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/tls/keystore/46366a790b6d533e8d056990a667d1b589faf060d2197fc69896461a66ad7cda_sk
+    - CORE_PEER_TLS_ENABLED=false
+    - CORE_PEER_GOSSIP_USELEADERELECTION=true
+    - CORE_PEER_GOSSIP_ORGLEADER=false
+    - CORE_PEER_TLS_CLIENTKEY_FILE=/etc/hyperledger/fabric/tls/keystore/46366a790b6d533e8d056990a667d1b589faf060d2197fc69896461a66ad7cda_sk
+    - CORE_PEER_TLS_CLIENTCERT_FILE=/etc/hyperledger/fabric/tls/signcerts/cert.pem
+    - CORE_PEER_TLS_CLIENTROOTCAS_FILES=/etc/hyperledger/fabric/tls/tlscacerts/tls-127-0-0-1-7054.pem
     volumes:
     - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/peers_bin/peer1.peerOrg/config:/etc/hyperledger/fabric/config
-    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/peerOrganizations/peerOrg/users/Admin@peerOrg/msp:/etc/hyperledger/fabric/msp
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/peerOrganizations/peerOrg/users/Admin@peerOrg/msp:/etc/hyperledger/fabric/mspAdmin
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/peerOrganizations/peerOrg/peers/peer1.peerOrg/msp:/etc/hyperledger/fabric/msp
     - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/peerOrganizations/peerOrg/peers/peer1.peerOrg/tls:/etc/hyperledger/fabric/tls
+    - /var/run/docker.sock:/var/run/docker.sock
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/fabric-ca-client/tls-root-cert/tls-ca-cert.pem:/etc/hyperledger/fabric/tls/
     ports:
     - 7051:7051
     networks:
@@ -118,14 +132,26 @@ services:
     - CORE_PEER_CHAINCODEADDRESS=peer2.peerOrg:7053
     - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:7053
     - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer2.peerOrg:7052
-    - CORE_PEER_GOSSIP_BOOTSTRAP=peer2.peerOrg:7052
+    - CORE_PEER_GOSSIP_BOOTSTRAP=peer1.peerOrg:7051
     - CORE_PEER_LOCALMSPID=peerOrg
     - CORE_OPERATIONS_LISTENADDRESS=0.0.0.0:7054
     - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/msp
+    - CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/tls/tls-ca-cert.pem
+    - CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/tls/signcerts/cert.pem
+    - CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/tls/keystore/530fe324b17cd2b33c278549838392fc083c6477e687776fb87d0c7334f376ef_sk
+    - CORE_PEER_TLS_ENABLED=false
+    - CORE_PEER_GOSSIP_USELEADERELECTION=false
+    - CORE_PEER_GOSSIP_ORGLEADER=true
+    - CORE_PEER_TLS_CLIENTKEY_FILE=/etc/hyperledger/fabric/tls/keystore/530fe324b17cd2b33c278549838392fc083c6477e687776fb87d0c7334f376ef_sk
+    - CORE_PEER_TLS_CLIENTCERT_FILE=/etc/hyperledger/fabric/tls/signcerts/cert.pem
+    - CORE_PEER_TLS_CLIENTROOTCAS_FILES=/etc/hyperledger/fabric/tls/tlscacerts/tls-127-0-0-1-7054.pem
     volumes:
     - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/peers_bin/peer2.peerOrg/config:/etc/hyperledger/fabric/config
-    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/peerOrganizations/peerOrg/users/Admin@peerOrg/msp:/etc/hyperledger/fabric/msp
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/peerOrganizations/peerOrg/users/Admin@peerOrg/msp:/etc/hyperledger/fabric/mspAdmin
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/peerOrganizations/peerOrg/peers/peer2.peerOrg/msp:/etc/hyperledger/fabric/msp
     - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/peerOrganizations/peerOrg/peers/peer2.peerOrg/tls:/etc/hyperledger/fabric/tls
+    - /var/run/docker.sock:/var/run/docker.sock
+    - /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/fabric-ca-client/tls-root-cert/tls-ca-cert.pem:/etc/hyperledger/fabric/tls/
     ports:
     - 7052:7052
     networks:

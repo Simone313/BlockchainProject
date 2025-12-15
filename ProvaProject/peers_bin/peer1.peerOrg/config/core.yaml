@@ -10,7 +10,7 @@ peer:
     broadcastTimeout: 30s
     dialTimeout: 2m
   keepalive:
-    interval: 7200s
+    interval: 300s
     timeout: 20s
     minInterval: 60s
     client:
@@ -20,9 +20,9 @@ peer:
       interval: 60s
       timeout: 20s
   gossip:
-    bootstrap: .peerOrg:7051
-    useLeaderElection: false
-    orgLeader: true
+    bootstrap: peer2.peerOrg:7052
+    useLeaderElection: true
+    orgLeader: false
     membershipTrackerInterval: 5s
     endpoint: peer1.peerOrg:7051
     maxBlockCountToStore: 10
@@ -57,24 +57,28 @@ peer:
       leaderElectionDuration: 5s
     pvtData:
       implicitCollectionDisseminationPolicy:
-        requiredPeerCount: 1
+        requiredPeerCount: 0
         maxPeerCount: 1
     state:
-      enabled: false
+      enabled: true
   tls:
-    enabled: true
-    clientAuthRequired: true
-    cert: &id002
+    enabled: false
+    clientAuthRequired: false
+    cert:
       file: /etc/hyperledger/fabric/tls/signcerts/cert.pem
-    key: &id001
-      file: /etc/hyperledger/fabric/tls/keystore/e495a95f6929e9e13c27b44bf99a871ad2ab9b0eadce1d28cefefa4f1842d54c_sk
+    key:
+      file: /etc/hyperledger/fabric/tls/keystore/46366a790b6d533e8d056990a667d1b589faf060d2197fc69896461a66ad7cda_sk
     rootcert:
       file: /etc/hyperledger/fabric/tls/tlscacerts/tls-127-0-0-1-7054.pem
     clientRootCAs:
       files:
       - /etc/hyperledger/fabric/tls/tlscacerts/tls-127-0-0-1-7054.pem
-    clientKey: *id001
-    clientCert: *id002
+    clientKey:
+      file: /etc/hyperledger/fabric/tls/keystore/46366a790b6d533e8d056990a667d1b589faf060d2197fc69896461a66ad7cda_sk
+    clientCert:
+      file: /etc/hyperledger/fabric/tls/signcerts/cert.pem
+    clientRootcert:
+      file: /etc/hyperledger/fabric/tls/tlscacerts/tls-127-0-0-1-7054.pem
   authentication:
     timewindow: 15m
   fileSystemPath: /var/hyperledger/production/peer1.peerOrg
@@ -138,10 +142,10 @@ peer:
       gatewayService: 500
   maxRecvMsgSize: 104857600
   maxSendMsgSize: 104857600
-  chaincodeListenAddress: 0.0.0.0:7052
-  chaincodeAddress: peer1.peerOrg:7051
-  chaincode:
-    externalBuilders: null
+  chaincodeListenAddress: 0.0.0.0:7053
+  chaincodeAddress: peer1.peerOrg:7053
+  chaincode: {
+    }
 vm:
   endpoint: unix:///var/run/docker.sock
   docker:
@@ -228,7 +232,7 @@ ledger:
   snapshots:
     rootDir: /var/hyperledger/production/snapshots
 operations:
-  listenAddress: 127.0.0.1:7052
+  listenAddress: 127.0.0.1:7053
   tls:
     enabled: false
 metrics:

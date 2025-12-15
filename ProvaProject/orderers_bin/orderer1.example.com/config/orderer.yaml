@@ -2,11 +2,11 @@ General:
   ListenAddress: 0.0.0.0
   ListenPort: 7050
   TLS:
-    Enabled: true
-    PrivateKey: /var/hyperledger/orderer/tls/keystore/a3b1696947be84798068ff0bacc9c9b641cceb8f3bdfab9d77dd5c464f27c799_sk
+    Enabled: false
+    PrivateKey: /var/hyperledger/orderer/tls/keystore/3cabca2926d420b00987a0eee066cec9c08ccd2357598ec841c7266b8c7c03b1_sk
     Certificate: /var/hyperledger/orderer/tls/signcerts/cert.pem
     RootCAs: /var/hyperledger/orderer/tls/tlscacerts/tls-127-0-0-1-7054.pem
-    ClientAuthRequired: true
+    ClientAuthRequired: false
     ClientRootCAs:
     - /var/hyperledger/orderer/tls/tlscacerts/tls-127-0-0-1-7054.pem
   Keepalive:
@@ -72,8 +72,8 @@ Admin:
   TLS:
     Enabled: true
     Certificate: /var/hyperledger/orderer/tls/signcerts/cert.pem
-    PrivateKey: /var/hyperledger/orderer/tls/keystore/a3b1696947be84798068ff0bacc9c9b641cceb8f3bdfab9d77dd5c464f27c799_sk
-    ClientAuthRequired: true
+    PrivateKey: /var/hyperledger/orderer/tls/keystore/3cabca2926d420b00987a0eee066cec9c08ccd2357598ec841c7266b8c7c03b1_sk
+    ClientAuthRequired: false
     ClientRootCAs:
     - /var/hyperledger/orderer/tls/tlscacerts/tls-127-0-0-1-7054.pem
 ChannelParticipation:

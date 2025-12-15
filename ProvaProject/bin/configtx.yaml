@@ -1,5 +1,5 @@
 Organizations:
-- &id001
+- &id002
   Name: peerOrg
   SkipAsForeign: false
   ID: peerOrg
@@ -8,30 +8,35 @@ Organizations:
     Writers:
       Type: ImplicitMeta
       Rule: ANY Writers
+    Endorsement:
+      Type: ImplicitMeta
+      Rule: ANY Endorsers
     Admins:
       Type: ImplicitMeta
       Rule: MAJORITY Admins
     Readers:
       Type: ImplicitMeta
       Rule: ANY Readers
-  OrdererEndpoints:
-  - 127.0.0.1:7050
+  OrdererEndpoints: &id001
+  - orderer1.example.com:7050
   AnchorPeers:
-  - Host: 127.0.0.1
-    Port: 7051
-- &id002
+  - Port: 7051
+    Host: peer1.peerOrg
+- &id003
   Policies:
     Writers:
       Type: Signature
-      Rule: OR('Consenters.admin')
+      Rule: OR('Consenters.member')
+    Endorsement:
+      Type: Signature
+      Rule: OR('Consenters.member')
     Admins:
       Type: Signature
       Rule: OR('Consenters.admin')
     Readers:
       Type: Signature
       Rule: OR('Consenters.member')
-  OrdererEndpoints:
-  - orderer1.example.com:7080
+  OrdererEndpoints: *id001
   ID: Consenters
   Name: Consenters
   MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/ordererOrganizations/Consenters/msp
@@ -64,7 +69,8 @@ Application:
     event/Block: /Channel/Application/Readers
     event/FilteredBlock: /Channel/Application/Readers
   Organizations:
-  - *id001
+  - *id002
+  - *id003
   Policies:
     LifecycleEndorsement:
       Type: ImplicitMeta
@@ -81,25 +87,33 @@ Application:
     Admins:
       Type: ImplicitMeta
       Rule: MAJORITY Admins
-  Capabilities: &id010
+  Capabilities: &id006
     V2_0: true
-Orderer:
-  OrdererType: solo
-  Addresses: null
+Orderer: &id007
+  OrdererType: etcdraft
+  Addresses:
+  - orderer1.example.com:7080
   BatchTimeout: 2s
-  BatchSize: &id006
+  BatchSize:
     MaxMessageCount: 500
     AbsoluteMaxBytes: 10 MB
     PreferredMaxBytes: 2 MB
   MaxChannels: 0
-  Kafka: &id007
+  Kafka:
     Brokers:
     - kafka0:9092
     - kafka1:9092
     - kafka2:9092
+  EtcdRaft:
+    Consenters:
+    - ClientTLSCert: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/tls/signcerts/cert.pem
+      port: 7050
+      Host: orderer1.example.com
+      ServerTLSCert: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/ProvaProject/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/tls/signcerts/cert.pem
   Organizations:
   - *id002
-  Policies: &id008
+  - *id003
+  Policies:
     Readers:
       Type: ImplicitMeta
       Rule: ANY Readers
@@ -112,12 +126,10 @@ Orderer:
     BlockValidation:
       Type: ImplicitMeta
       Rule: ANY Writers
-  Capabilities: &id009
+  Capabilities:
     V2_0: true
-  addresses: &id005
-  - orderer1.example.com:7080
 Channel:
-  Policies: &id003
+  Policies: &id004
     Readers:
       Type: ImplicitMeta
       Rule: ANY Readers
@@ -127,44 +139,39 @@ Channel:
     Admins:
       Type: ImplicitMeta
       Rule: MAJORITY Admins
-  Capabilities: &id004
+  Capabilities: &id005
     V2_0: true
 Profiles:
   SampleAppChannelEtcdRaft:
-    Policies: *id003
-    Capabilities: *id004
-    Orderer: &id012
-      OrdererType: solo
-      Addresses: *id005
-      BatchTimeout: 2s
-      BatchSize: *id006
-      MaxChannels: 0
-      Kafka: *id007
+    Policies: *id004
+    Capabilities: *id005
+    Application: &id008
       Organizations:
-      - *id001
-      Policies: *id008
-      Capabilities: *id009
-    Application: &id011
-      Organizations:
-      - *id001
+      - *id002
+      - *id003
       Policies:
         Writers:
           Type: ImplicitMeta
           Rule: ANY Writers
+        Endorsement:
+          Type: ImplicitMeta
+          Rule: ANY Endorsers
         Admins:
           Type: ImplicitMeta
           Rule: MAJORITY Admins
         Readers:
           Type: ImplicitMeta
           Rule: ANY Readers
-      Capabilities: *id010
+      Capabilities: *id006
+    Orderer: *id007
     Consortium: SampleConsortium
   OrdererGenesis:
-    Policies: *id003
+    Policies: *id004
     Consortiums:
       SampleConsortium:
         Organizations:
-        - *id001
-    Application: *id011
-    Capabilities: *id004
-    Orderer: *id012
+        - *id002
+        - *id003
+    Application: *id008
+    Capabilities: *id005
+    Orderer: *id007

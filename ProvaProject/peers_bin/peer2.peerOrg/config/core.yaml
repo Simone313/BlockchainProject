@@ -10,7 +10,7 @@ peer:
     broadcastTimeout: 30s
     dialTimeout: 2m
   keepalive:
-    interval: 7200s
+    interval: 300s
     timeout: 20s
     minInterval: 60s
     client:
@@ -20,11 +20,11 @@ peer:
       interval: 60s
       timeout: 20s
   gossip:
-    bootstrap: peer1.peerOrg.peerOrg:7051
-    useLeaderElection: false
+    bootstrap: peer1.peerOrg:7051
+    useLeaderElection: true
     orgLeader: false
     membershipTrackerInterval: 5s
-    endpoint: peer2.peerOrg:7051
+    endpoint: peer2.peerOrg:7052
     maxBlockCountToStore: 10
     maxPropagationBurstLatency: 10ms
     maxPropagationBurstSize: 10
@@ -49,7 +49,7 @@ peer:
     reconnectInterval: 25s
     maxConnectionAttempts: 120
     msgExpirationFactor: 20
-    externalEndpoint: peer2.peerOrg:7051
+    externalEndpoint: peer2.peerOrg:7052
     election:
       startupGracePeriod: 15s
       membershipSampleInterval: 1s
@@ -57,24 +57,28 @@ peer:
       leaderElectionDuration: 5s
     pvtData:
       implicitCollectionDisseminationPolicy:
-        requiredPeerCount: 1
+        requiredPeerCount: 0
         maxPeerCount: 1
     state:
-      enabled: false
+      enabled: true
   tls:
-    enabled: true
-    clientAuthRequired: true
-    cert: &id002
+    enabled: false
+    clientAuthRequired: false
+    cert:
       file: /etc/hyperledger/fabric/tls/signcerts/cert.pem
-    key: &id001
-      file: /etc/hyperledger/fabric/tls/keystore/0632e87ba01ac58d987e7f9d264dfb3f735fb30a0738ad44b22bfc0134ca8920_sk
+    key:
+      file: /etc/hyperledger/fabric/tls/keystore/530fe324b17cd2b33c278549838392fc083c6477e687776fb87d0c7334f376ef_sk
     rootcert:
       file: /etc/hyperledger/fabric/tls/tlscacerts/tls-127-0-0-1-7054.pem
     clientRootCAs:
       files:
       - /etc/hyperledger/fabric/tls/tlscacerts/tls-127-0-0-1-7054.pem
-    clientKey: *id001
-    clientCert: *id002
+    clientKey:
+      file: /etc/hyperledger/fabric/tls/keystore/530fe324b17cd2b33c278549838392fc083c6477e687776fb87d0c7334f376ef_sk
+    clientCert:
+      file: /etc/hyperledger/fabric/tls/signcerts/cert.pem
+    clientRootcert:
+      file: /etc/hyperledger/fabric/tls/tlscacerts/tls-127-0-0-1-7054.pem
   authentication:
     timewindow: 15m
   fileSystemPath: /var/hyperledger/production/peer2.peerOrg
@@ -139,9 +143,9 @@ peer:
   maxRecvMsgSize: 104857600
   maxSendMsgSize: 104857600
   chaincodeListenAddress: 0.0.0.0:7053
-  chaincodeAddress: peer2.peerOrg:7052
-  chaincode:
-    externalBuilders: null
+  chaincodeAddress: peer2.peerOrg:7053
+  chaincode: {
+    }
 vm:
   endpoint: unix:///var/run/docker.sock
   docker:
