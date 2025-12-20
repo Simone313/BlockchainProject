@@ -64,8 +64,10 @@ public class Blockchain {
      * @throws InterruptedException se l'esecuzione viene interrotta
      */
     public static void main(String[] args) throws IOException, InterruptedException {
+        String policy="OR('" + "peerOrg" + ".member')";
+        mainDirectory="ProvaProject";
         
-        
+       
        /*if(!isDockerRunning()){
            System.err.println("Docker is not running. Please start Docker Desktop and try again.");
            return;
@@ -899,7 +901,7 @@ public class Blockchain {
                                 + "cd "+peer_name+" &&"
                                 + "mkdir msp tls");
                     }
-                    createGenesisBlock(organization_name, first_peer);
+                    createGenesisBlock(organization_name, peers_names);
                     
                     createConfig_yaml("organizations/peerOrganizations/"+organization_name+"/msp", organization_name);
                     LinkedList<Integer> peer_ports= new LinkedList<Integer>();
@@ -922,13 +924,13 @@ public class Blockchain {
                         copy_peer_bin(peers_names.get(i), organization_name);
                         if(num_peer>1){
                             if(i==0){
-                                configure_peer_core(peers_names.get(i), peer_ports.get(i), peers_names.get(i+1),peer_ports.get(i+1),organization_name);
+                                configure_peer_core(peers_names.get(i), peer_ports.get(i), peers_names.get(i+1),peer_ports.get(i+1),organization_name,i);
                             }else{
-                                configure_peer_core(peers_names.get(i), peer_ports.get(i), first_peer, peer_ports.get(0),organization_name);
+                                configure_peer_core(peers_names.get(i), peer_ports.get(i), first_peer, peer_ports.get(0),organization_name,i);
                             }
                             
                         }else{
-                            configure_peer_core(peers_names.get(i), peer_ports.get(i), null, 0,organization_name);
+                            configure_peer_core(peers_names.get(i), peer_ports.get(i), null, 0,organization_name,i);
                         }
                         
                         
@@ -961,7 +963,7 @@ public class Blockchain {
                                     "docker exec " + peers_names.get(i) + " bash -c '"
                                     + "export CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/mspAdmin && "
                                     + "export CORE_PEER_TLS_ENABLED=true && "
-                                    + "export CORE_PEER_ADDRESS="+peers_names.get(i)+":"+peer_ports.get(i)+" &&"
+                                    + "export CORE_PEER_ADDRESS="+peers_names.get(i)+":7051 &&"
                                     + "export CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/msp/cacerts/127-0-0-1-7054.pem && "
                                     + "export CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/msp/signcerts/cert.pem && "
                                     + "export CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/msp/keystore/" + executeWSLCommandToString("ls "+mainDirectory+"/organizations/peerOrganizations/"+organization_name+"/peers/"+peers_names.get(i)+"/msp/keystore/ | grep _sk").trim() + " && "
@@ -980,8 +982,8 @@ public class Blockchain {
                                 String dockerCmd =
                                     "docker exec " + peers_names.get(i) + " bash -c '"
                                     + "export CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/mspAdmin && "
-                                    + "export CORE_PEER_TLS_ENABLED=false && "
-                                    + "export CORE_PEER_ADDRESS="+peers_names.get(i)+":"+peer_ports.get(i)+" &&"
+                                    + "export CORE_PEER_TLS_ENABLED=true && "
+                                    + "export CORE_PEER_ADDRESS="+peers_names.get(i)+":7051 &&"
                                     + "export CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/msp/cacerts/127-0-0-1-7054.pem && "
                                     + "export CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/msp/signcerts/cert.pem && "
                                     + "export CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/msp/keystore/" + executeWSLCommandToString("ls "+mainDirectory+"/organizations/peerOrganizations/"+organization_name+"/peers/"+peers_names.get(i)+"/msp/keystore/ | grep _sk").trim() + " && "
@@ -989,6 +991,9 @@ public class Blockchain {
                                 executeWSLCommand(dockerCmd);
 
                             }
+
+                            AnchorPeerUpdate(channel_name, organization_name, peers_names.get(0));
+
 
                             create_chaincode(channel_name, organization_name, peers_names, peer_ports);
                             break;
@@ -1072,7 +1077,7 @@ public class Blockchain {
                                     "docker exec " + peer_name + " bash -c '"
                                     + "export CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/mspAdmin && "
                                     + "export CORE_PEER_TLS_ENABLED=true && "
-                                    + "export CORE_PEER_ADDRESS="+peer_name+":"+peer_port+" &&"
+                                    + "export CORE_PEER_ADDRESS="+peer_name+":7051 &&"
                                     + "export CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/msp/cacerts/127-0-0-1-7054.pem && "
                                     + "export CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/msp/signcerts/cert.pem && "
                                     + "export CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/msp/keystore/" + executeWSLCommandToString("ls "+mainDirectory+"/organizations/peerOrganizations/"+organization_name+"/peers/"+peer_name+"/msp/keystore/ | grep _sk").trim() + " && "
@@ -1133,12 +1138,16 @@ public class Blockchain {
         String dockerCmd =
             "docker exec " + peer_name + " bash -c '"
             + "export CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/mspAdmin && "
-            + "export CORE_PEER_TLS_ENABLED=false && "
+            + "export CORE_PEER_TLS_ENABLED=true && "
             + "export CORE_PEER_ADDRESS="+peer_name+":7051 &&"
-            //+ "export CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/msp/cacerts/127-0-0-1-7054.pem && "
-            //+ "export CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/msp/signcerts/cert.pem && "
-            //+ "export CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/msp/keystore/" + executeWSLCommandToString("ls "+mainDirectory+"/organizations/peerOrganizations/"+organization_name+"/peers/"+peer_name+"/msp/keystore/ | grep _sk").trim() + " && "
-            + "peer channel create -c " + channel_name + " -f /etc/hyperledger/fabric/" + channel_name + ".tx -o orderer1.example.com:7050 --outputBlock /etc/hyperledger/fabric/" + channel_name + "_block.pb'";
+            + "export CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/tls/tls-ca-cert.pem && "
+            + "export CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/tls/signcerts/cert.pem && "
+            + "export CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/tls/keystore/" + executeWSLCommandToString("ls "+mainDirectory+"/organizations/peerOrganizations/"+organization_name+"/peers/"+peer_name+"/tls/keystore/ | grep _sk").trim() + " && "
+            + "peer channel create -c " + channel_name 
+            + " -f /etc/hyperledger/fabric/" + channel_name 
+            + ".tx -o orderer1.example.com:7050 "
+            + "--tls --cafile /etc/hyperledger/fabric/tls/tls-ca-cert.pem "
+            + "--outputBlock /etc/hyperledger/fabric/" + channel_name + "_block.pb'";
         executeWSLCommand(dockerCmd);
         executeWSLCommand("docker cp "+peer_name+":/etc/hyperledger/fabric/"+channel_name+"_block.pb "+mainDirectory+"/bin/");
         /*executeWSLCommand("cd "+mainDirectory+" && "+
@@ -1346,7 +1355,7 @@ public class Blockchain {
      * @throws FileNotFoundException se un file richiesto non viene trovato
      * @throws IOException in caso di altri errori I/O
      */
-    public static void configure_peer_core(String peer_name, int port, String second_peer, int second_peer_port, String org_name) throws FileNotFoundException, IOException{
+    public static void configure_peer_core(String peer_name, int port, String second_peer, int second_peer_port, String org_name, int peer_number) throws FileNotFoundException, IOException{
         Scanner in= new Scanner(System.in);
         System.out.println(GREEN+"------------ PEER "+peer_name+" CONFIGURATION ------------"+RESET);
         File peer_config=new File(""+ mainDirectory +"/peers_bin/"+peer_name+"/config/core.yaml");
@@ -1408,7 +1417,7 @@ public class Blockchain {
         // Bootstrap
         String bootstrap;
         if(second_peer!=null){
-            bootstrap= second_peer +":"+second_peer_port;
+            bootstrap= second_peer +":7051";
         }else{
             bootstrap= "";
         }
@@ -1456,7 +1465,7 @@ public class Blockchain {
         
         // Abilita TLS
         //System.out.print(GREEN+"Enable TLS (y/n): "+RESET);
-        boolean tlsEnabled = false;//in.next().equals("n");
+        boolean tlsEnabled = true;//in.next().equals("n");
         tls.put("enabled", tlsEnabled);
         
         
@@ -1669,7 +1678,7 @@ public class Blockchain {
         }
         
         //Aggiunta del peer al file docker-compose.yaml
-        add_peer_to_docker(peer_name,org_name,cfgPath,mspAdminPath, mspPath ,tlsPath,ports, cDB, tlsEnabled, bootstrap);
+        add_peer_to_docker(peer_name,org_name,cfgPath,mspAdminPath, mspPath ,tlsPath,ports, cDB, tlsEnabled, bootstrap, peer_number);
         
         System.out.println("Starting the peer...");
         new peerThread(peer_name, cDB, mainDirectory);
@@ -2006,6 +2015,9 @@ public class Blockchain {
                         + "mkdir "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/tlscacerts &&"
                         + "cp "+mainDirectory+"/fabric-ca-server-org1/tls/cert.pem "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/tlscacerts");
         
+                    
+        executeWSLCommand("mkdir -p "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/admincerts && "
+                + "cp  "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/signcerts/* "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/admincerts/");
         //executeWSLCommand("mkdir -p "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/admincerts");
         //executeWSLCommand("cp  "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/signcerts/* "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/admincerts/");
 
@@ -2263,7 +2275,7 @@ public class Blockchain {
      * @param couchDB true se il peer deve avere CouchDB associato
      * @throws IOException in caso di errori I/O
      */
-    private static void add_peer_to_docker(String peerName, String org_name, String cfgPath, String mspAdminPath ,String mspPath, String tlsPath, LinkedList<Integer> ports, boolean couchDB, boolean tls_enabled, String bootstrap) throws IOException{
+    private static void add_peer_to_docker(String peerName, String org_name, String cfgPath, String mspAdminPath ,String mspPath, String tlsPath, LinkedList<Integer> ports, boolean couchDB, boolean tls_enabled, String bootstrap, int peer_number) throws IOException{
         Yaml yaml = new Yaml();
         File file = new File(mainDirectory + "/docker-compose.yaml");
 
@@ -2288,14 +2300,20 @@ public class Blockchain {
         List<String> env = new ArrayList<>();
         env.add("FABRIC_CFG_PATH=/etc/hyperledger/fabric/config");
         env.add("CORE_PEER_ID=" + peerName);
-        env.add("CORE_PEER_ADDRESS=" + peerName + ":"+ports.get(0));
-        env.add("CORE_PEER_LISTENADDRESS=0.0.0.0:"+ports.get(0));
-        env.add("CORE_PEER_CHAINCODEADDRESS=" + peerName + ":"+(ports.get(0)+1));
-        env.add("CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:"+ (ports.get(0)+1));
-        env.add("CORE_PEER_GOSSIP_EXTERNALENDPOINT=" + peerName + ":" + ports.get(0));
+
+        env.add("CORE_PEER_ADDRESS=" + peerName + ":7051");
+        env.add("CORE_PEER_LISTENADDRESS=0.0.0.0:7051");
+
+        env.add("CORE_PEER_CHAINCODEADDRESS=" + peerName + ":7052");
+        env.add("CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:7052");
+
+        env.add("CORE_PEER_GOSSIP_EXTERNALENDPOINT=" + peerName + ":7051");
+        env.add("CORE_PEER_GOSSIP_INTERNALENDPOINT=" + peerName + ":7051");
         env.add("CORE_PEER_GOSSIP_BOOTSTRAP=" + bootstrap);
+
         env.add("CORE_PEER_LOCALMSPID="+org_name);
-        env.add("CORE_OPERATIONS_LISTENADDRESS=0.0.0.0:"+(ports.get(0)+2));
+        env.add("CORE_OPERATIONS_LISTENADDRESS=0.0.0.0:7053");
+
         env.add("CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/msp");
         env.add("CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/tls/tls-ca-cert.pem");
         env.add("CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/tls/signcerts/cert.pem");
@@ -2315,13 +2333,17 @@ public class Blockchain {
         volumes.add(mspPath + ":/etc/hyperledger/fabric/msp");
         volumes.add(tlsPath + ":/etc/hyperledger/fabric/tls");
         volumes.add("/var/run/docker.sock:/var/run/docker.sock");
-        volumes.add("/mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem:/etc/hyperledger/fabric/tls/");
+        volumes.add("/mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem:/etc/hyperledger/fabric/tls/tls-ca-cert.pem");
         peerConfig.put("volumes", volumes);
         
          // Ports
-        peerConfig.put("ports", Collections.singletonList(ports.get(0)+":"+ports.get(0)));
+        peerConfig.put("ports", Arrays.asList((7051+(1000*peer_number))+":7051",(7052+(1000*peer_number))+":7052",(7053+(1000*peer_number))+":7053"));
         // Network
-        peerConfig.put("networks", Arrays.asList("fabric_network"));
+        Map<String, Object> networks = new LinkedHashMap<>();
+        Map<String, Object> fabric_network= new LinkedHashMap<>();
+        fabric_network.put("aliases", Arrays.asList(peerName));
+        networks.put("fabric_network", fabric_network);
+        peerConfig.put("networks", networks);
         // Command
         peerConfig.put("command", "peer node start");
         if(couchDB){
@@ -2411,7 +2433,7 @@ public class Blockchain {
      * @throws FileNotFoundException se qualche file richiesto non viene trovato
      * @throws IOException in caso di errori I/O
      */
-    private static void createGenesisBlock(String org_name, String peer) throws FileNotFoundException, IOException{
+    private static void createGenesisBlock(String org_name, LinkedList<String> peers) throws FileNotFoundException, IOException{
         
         downloadBinForGenesisBlock();
         while(!executeWSLCommandToString("ls "+mainDirectory+"/bin").contains("configtx.yaml")){
@@ -2507,12 +2529,15 @@ public class Blockchain {
         peerOrg.put("Policies", createOrdererPolicies(false)); //createOrgPolicies("org1"));
         peerOrg.put("MSPDir",path+"/"+mainDirectory+"/organizations/peerOrganizations/"+org_name+"/msp");
         peerOrg.put("OrdererEndpoints", ordererEndpoints);
-                peerOrg.put("AnchorPeers", Arrays.asList(new HashMap<String,Object>() {
-            {
-                put("Host", peer);
-                put("Port", 7051);
-            }
-        }));
+        peerOrg.put("AnchorPeers", Arrays.asList(new HashMap<String,Object>() {
+        {
+            put("Host", peers.get(0));
+            put("Port", 7051);
+        }
+        }
+        ));
+        
+        
         
         Map<String,Object> consenterOrg= new HashMap<>();
         consenterOrg.put("Name", "Consenters");
@@ -2657,7 +2682,7 @@ public class Blockchain {
         SectionApplication.put("Organizations", Arrays.asList(Org));*/
         SectionApplication.put("Policies", createOrdererPolicies(false));
         SectionApplication.remove("ACLs");
-        SectionApplication.put("Organizations", Arrays.asList(peerOrg, consenterOrg));
+        SectionApplication.put("Organizations", Arrays.asList(peerOrg));
         
         sampleConsortium = new HashMap<>();
 
@@ -3078,7 +3103,7 @@ public class Blockchain {
                 "      # Cluster (Raft)\n" +
                 "      - ORDERER_GENERAL_CLUSTER_LISTENADDRESS=0.0.0.0\n" +
                 "      - ORDERER_GENERAL_CLUSTER_LISTENPORT=7080\n" +
-                "      - ORDERER_GENERAL_CLUSTER_TLS_ENABLED=false\n" +
+                "      - ORDERER_GENERAL_CLUSTER_TLS_ENABLED=true\n" +
                 "      - ORDERER_GENERAL_CLUSTER_TLS_CLIENTAUTHREQUIRED=false\n" +
                 "      - ORDERER_GENERAL_CLUSTER_SERVERCERTIFICATE=/var/hyperledger/orderer/tls/signcerts/cert.pem\n" +
                 "      - ORDERER_GENERAL_CLUSTER_SERVERPRIVATEKEY=/var/hyperledger/orderer/tls/keystore/"+executeWSLCommandToString("ls "+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/tls/keystore/ | grep '_sk'").trim()+"\n" +
@@ -3090,7 +3115,7 @@ public class Blockchain {
                 "      - ORDERER_GENERAL_LOCALMSPDIR=/var/hyperledger/orderer/msp\n" +
                 "\n" +
                 "      # TLS\n" +
-                "      - ORDERER_GENERAL_TLS_ENABLED=false \n" +
+                "      - ORDERER_GENERAL_TLS_ENABLED=true \n" +
                 "      - ORDERER_GENERAL_TLS_CLIENTAUTHREQUIRED=false\n" +
                 "      - ORDERER_GENERAL_TLS_CLIENTROOTCAS=/var/hyperledger/orderer/tls/tls-ca-cert.pem\n" +
                 "      - ORDERER_GENERAL_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/keystore/"+executeWSLCommandToString("ls "+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/tls/keystore/ | grep '_sk'").trim()+"\n" +
@@ -3102,11 +3127,11 @@ public class Blockchain {
                 "\n" +
                 "      # Admin service\n" +
                 "      - ORDERER_ADMIN_LISTENADDRESS=orderer1.example.com:9443\n" +
-                "      - ORDERER_ADMIN_TLS_ENABLED=false\n" +
+                "      - ORDERER_ADMIN_TLS_ENABLED=true\n" +
                 "      - ORDERER_ADMIN_TLS_ROOTCAS=/var/hyperledger/orderer/tls/tls-ca-cert.pem\n" +
                 "      - ORDERER_ADMIN_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/keystore/"+executeWSLCommandToString("ls "+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/tls/keystore/ | grep '_sk'").trim()+"\n" +
                 "      - ORDERER_ADMIN_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/signcerts/cert.pem\n" +
-                "      - ORDERER_ADMIN_TLS_CLIENTAUTHREQUIRED=false\n" +
+                "      - ORDERER_ADMIN_TLS_CLIENTAUTHREQUIRED=true\n" +
                 "      - ORDERER_ADMIN_TLS_CLIENTROOTCAS=/var/hyperledger/orderer/tls/tls-ca-cert.pem\n" +
                 "\n" +
                 "      # Channel participation\n" +
@@ -3507,7 +3532,7 @@ public class Blockchain {
                 "export CORE_PEER_LOCALMSPID="+org_name+" && " +
                 "export CORE_PEER_MSPCONFIGPATH=$PWD/"+mainDirectory+"/organizations/peerOrganizations/"+org_name+"/msp && " +
                 "export CORE_PEER_ADDRESS="+ peers.get(0) +":"+peer_ports.get(0)+" && " +
-                "export CORE_PEER_TLS_ENABLED=false && "+
+                "export CORE_PEER_TLS_ENABLED=true && "+
                 "export FABRIC_CFG_PATH=$PWD/"+mainDirectory+"/peers_bin/"+ peers.get(0) +"/config/ && " +      
                 "./peer lifecycle chaincode package mycc.tar.gz " +
                 "--path $PWD/"+mainDirectory+"/atcc " +
@@ -3524,35 +3549,70 @@ public class Blockchain {
                 "export CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/mspAdmin && " +
                 "peer lifecycle chaincode install /etc/hyperledger/fabric/mycc.tar.gz'");
         }
+
+        String policy="OR('" + org_name + ".member')";
         //Approve and commit chaincode
-        executeWSLCommand("cd "+mainDirectory+" &&"
-                + "docker exec " + peers.get(0) + " bash -c '"
-                +"export CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/mspAdmin && "
-                + "peer lifecycle chaincode approveformyorg  "
-                + "-o orderer1.example.com:7050 "
-                //+" --tls --cafile /etc/hyperledger/fabric/tls/tlscacerts/tls-127-0-0-1-7054.pem "
-                + "--channelID "+channelName+" "
-                + "--name mycc "
-                + "--version 1.0 " 
-                + "--sequence 1 "
-                + "--init-required " 
-                + "--package-id mycc:1.0'");
+        executeWSLCommand(
+            "cd " + mainDirectory + " && " +
+            "docker exec " + peers.get(0) + " bash -c '" +
+            "export CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/mspAdmin && " +
+            "peer lifecycle chaincode approveformyorg " +
+            "-o orderer1.example.com:7050 " +
+            "--tls " +
+            "--cafile /etc/hyperledger/fabric/tls/tls-ca-cert.pem " +
+            "--channelID " + channelName + " " +
+            "--name mycc " +
+            "--version 1.0 " +
+            "--sequence 1 " +
+            //"--init-required " +
+            "--package-id mycc:1.0'"
+        );
+
+
+        
+
         executeWSLCommand("cd "+mainDirectory+" &&"
                 + "docker exec " + peers.get(0) + " bash -c '"
                 +"export CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/mspAdmin && "
                 + "peer lifecycle chaincode commit "
                 +"-o orderer1.example.com:7050 "
-                //+" --tls --cafile /etc/hyperledger/fabric/tls/tlscacerts/tls-127-0-0-1-7054.pem "
+                +" --tls --cafile /etc/hyperledger/fabric/tls/tls-ca-cert.pem "
                 +"--channelID "+channelName+" "
                 +"--name mycc "
                 +"--version 1.0 " 
                 +"--sequence 1 "
-                +"--init-required '");
+                //+"--init-required "
+                +"--peerAddresses "+peers.get(0)+":"+peer_ports.get(0)+" "
+                +"--tlsRootCertFiles /etc/hyperledger/fabric/tls/tls-ca-cert.pem '");
 
         //Invoke chaincode
         /*executeWSLCommand("cd "+mainDirectory+" &&"
                 +"peer chaincode invoke "
                 +"-o 127.0.0.1:7050 -C "+channelName+" -n mycc -c '{\"Args\":[\"init\",\"a\",\"100\",\"b\",\"200\"]}' --isInit");*/
+    }
+
+    private static void AnchorPeerUpdate(String channel_name, String org_name, String peer){
+        executeWSLCommand("cd "+mainDirectory+"/bin &&"
+            +" ./configtxgen -profile SampleAppChannelEtcdRaft -outputAnchorPeersUpdate "+org_name+"Anchors.tx "
+            + "-channelID "+channel_name+" -asOrg "+org_name
+        );
+
+        executeWSLCommand("docker cp $PWD/"+mainDirectory+"/bin/"+org_name+"Anchors.tx "+peer+":/etc/hyperledger/fabric");
+
+        executeWSLCommand("cd "+mainDirectory+" &&"
+            +" docker exec "+peer+" bash -c '"
+            +"export CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/mspAdmin && "
+            +"peer channel update -o orderer1.example.com:7050 "
+            +"--tls --cafile /etc/hyperledger/fabric/tls/tls-ca-cert.pem "
+            +"-c "+channel_name+" "
+            +"-f /etc/hyperledger/fabric/"+org_name+"Anchors.tx'"
+        );
+
+        try {
+            Thread.sleep(10000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
     }
 
     private static boolean check_go(){
