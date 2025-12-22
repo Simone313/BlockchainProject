@@ -64,9 +64,6 @@ public class Blockchain {
      * @throws InterruptedException se l'esecuzione viene interrotta
      */
     public static void main(String[] args) throws IOException, InterruptedException {
-        String policy="OR('" + "peerOrg" + ".member')";
-        mainDirectory="ProvaProject";
-        
        
        /*if(!isDockerRunning()){
            System.err.println("Docker is not running. Please start Docker Desktop and try again.");
@@ -977,25 +974,56 @@ public class Blockchain {
                             System.out.print(GREEN+"Channel name: "+RESET);
                             String channel_name=in.next().toLowerCase();
                             createChannel(organization_name, peers_names.get(0), channel_name);
-                            for(int i=0;i<num_peer;i++){
-                                executeWSLCommand("docker cp "+mainDirectory+"/bin/"+channel_name+"_block.pb "+peers_names.get(i)+":/etc/hyperledger/fabric/");
+                            //Se abbiamo un solo peer, dobbiamo prima farlo joinare e poi aggiornare l'anchor peer 
+                            executeWSLCommand("docker cp "+mainDirectory+"/bin/"+channel_name+"_block.pb "+peers_names.get(0)+":/etc/hyperledger/fabric/");
                                 String dockerCmd =
-                                    "docker exec " + peers_names.get(i) + " bash -c '"
+                                    "docker exec " + peers_names.get(0) + " bash -c '"
                                     + "export CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/mspAdmin && "
                                     + "export CORE_PEER_TLS_ENABLED=true && "
-                                    + "export CORE_PEER_ADDRESS="+peers_names.get(i)+":7051 &&"
+                                    + "export CORE_PEER_ADDRESS="+peers_names.get(0)+":7051 &&"
                                     + "export CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/msp/cacerts/127-0-0-1-7054.pem && "
                                     + "export CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/msp/signcerts/cert.pem && "
-                                    + "export CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/msp/keystore/" + executeWSLCommandToString("ls "+mainDirectory+"/organizations/peerOrganizations/"+organization_name+"/peers/"+peers_names.get(i)+"/msp/keystore/ | grep _sk").trim() + " && "
+                                    + "export CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/msp/keystore/" + executeWSLCommandToString("ls "+mainDirectory+"/organizations/peerOrganizations/"+organization_name+"/peers/"+peers_names.get(0)+"/msp/keystore/ | grep _sk").trim() + " && "
                                     + "peer channel join -b /etc/hyperledger/fabric/" + channel_name + "_block.pb'";
                                 executeWSLCommand(dockerCmd);
 
+                                AnchorPeerUpdate(channel_name, organization_name, peers_names.get(0));
+                                create_chaincode_for_one_peer(channel_name, organization_name, peers_names.get(0), peer_ports.get(0));
+                            if (num_peer>1){
+                                for(int i=1;i<num_peer;i++){
+                                    executeWSLCommand("docker exec " + peers_names.get(i) + " bash -c '"
+                                    + "peer channel fetch 0 "+channel_name+"_block.pb -o orderer1.example.com:7050 -c "+channel_name+" --tls --cafile /etc/hyperledger/fabric/tls/tls-ca-cert.pem'");
+                                    executeWSLCommand("docker exec " + peers_names.get(i) + " bash -c '"
+                                    + "export CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/mspAdmin && "
+                                    + "peer channel join -b "+channel_name+"_block.pb'");
+                                    
+                                    executeWSLCommand(
+                                        "cd "+mainDirectory+" && " +
+                                            "export CORE_PEER_LOCALMSPID="+org_name+" && " +
+                                            "export CORE_PEER_MSPCONFIGPATH=$PWD/"+mainDirectory+"/organizations/peerOrganizations/"+org_name+"/msp && " +
+                                            "export CORE_PEER_ADDRESS="+ peers_names.get(i) +":"+port+" && " +
+                                            "export CORE_PEER_TLS_ENABLED=true && "+
+                                            "export FABRIC_CFG_PATH=$PWD/"+mainDirectory+"/peers_bin/"+ peers_names.get(i) +"/config/ && " +      
+                                            "./peer lifecycle chaincode package mycc.tar.gz " +
+                                            "--path $PWD/"+mainDirectory+"/atcc " +
+                                            "--lang golang " +
+                                            "--label mycc_1.0" 
+                                    );
+
+                                    
+                                    //Install chaincode
+
+                                    executeWSLCommand("docker cp $PWD/"+mainDirectory+"/mycc.tar.gz "+peers_names.get(i)+":/etc/hyperledger/fabric");
+                                    executeWSLCommand("cd "+mainDirectory+" &&"
+                                        + "docker exec " + peers_names.get(i) + " bash -c '"+
+                                        "export CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/mspAdmin && " +
+                                        "peer lifecycle chaincode install /etc/hyperledger/fabric/mycc.tar.gz'");
+                                }
+                                
                             }
+                            
 
-                            AnchorPeerUpdate(channel_name, organization_name, peers_names.get(0));
-
-
-                            create_chaincode(channel_name, organization_name, peers_names, peer_ports);
+                            
                             break;
                         }
                         default:{
@@ -2324,6 +2352,8 @@ public class Blockchain {
         env.add("CORE_PEER_TLS_CLIENTKEY_FILE=/etc/hyperledger/fabric/tls/keystore/"+executeWSLCommandToString("ls "+mainDirectory+"/organizations/peerOrganizations/"+ org_name + "/peers/" + peerName+"/tls/keystore/ | grep '_sk'").trim());
         env.add("CORE_PEER_TLS_CLIENTCERT_FILE=/etc/hyperledger/fabric/tls/signcerts/cert.pem");
         env.add("CORE_PEER_TLS_CLIENTROOTCAS_FILES=/etc/hyperledger/fabric/tls/tlscacerts/tls-127-0-0-1-7054.pem");
+
+        env.add("CORE_PEER_GOSSIP_ALIVEEXPIRATIONTIMEOUT=300s");
         peerConfig.put("environment", env);
         
         // Volumes
@@ -3373,6 +3403,9 @@ public class Blockchain {
             System.out.println(">>> Comando: " + bashCommand);
             while ((line = reader.readLine()) != null) {
                 ris=ris+line+"";
+                if(ris.contains("Package ID")){
+                    break;
+                }
             }
 
             // Leggi eventuali errori
@@ -3509,7 +3542,7 @@ public class Blockchain {
         }
     }
 
-    private static void create_chaincode(String channelName, String org_name, LinkedList<String> peers, LinkedList<Integer> peer_ports) throws IOException {
+    private static void create_chaincode_for_one_peer(String channelName, String org_name, String peer, int port) throws IOException {
         executeWSLCommand("cd "+mainDirectory+" &&"
                 + "mkdir atcc && cd atcc &&"
                 +" go mod init atcc &&"
@@ -3531,9 +3564,9 @@ public class Blockchain {
             "cd "+mainDirectory+" && " +
                 "export CORE_PEER_LOCALMSPID="+org_name+" && " +
                 "export CORE_PEER_MSPCONFIGPATH=$PWD/"+mainDirectory+"/organizations/peerOrganizations/"+org_name+"/msp && " +
-                "export CORE_PEER_ADDRESS="+ peers.get(0) +":"+peer_ports.get(0)+" && " +
+                "export CORE_PEER_ADDRESS="+ peer +":"+port+" && " +
                 "export CORE_PEER_TLS_ENABLED=true && "+
-                "export FABRIC_CFG_PATH=$PWD/"+mainDirectory+"/peers_bin/"+ peers.get(0) +"/config/ && " +      
+                "export FABRIC_CFG_PATH=$PWD/"+mainDirectory+"/peers_bin/"+ peer +"/config/ && " +      
                 "./peer lifecycle chaincode package mycc.tar.gz " +
                 "--path $PWD/"+mainDirectory+"/atcc " +
                 "--lang golang " +
@@ -3542,19 +3575,20 @@ public class Blockchain {
 
         
         //Install chaincode
-        for(int i=0; i<peers.size(); i++){
-            executeWSLCommand("docker cp $PWD/"+mainDirectory+"/mycc.tar.gz "+peers.get(i)+":/etc/hyperledger/fabric");
-            executeWSLCommand("cd "+mainDirectory+" &&"
-                + "docker exec " + peers.get(i) + " bash -c '"+
-                "export CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/mspAdmin && " +
-                "peer lifecycle chaincode install /etc/hyperledger/fabric/mycc.tar.gz'");
-        }
+
+        executeWSLCommand("docker cp $PWD/"+mainDirectory+"/mycc.tar.gz "+peer+":/etc/hyperledger/fabric");
+        executeWSLCommand("cd "+mainDirectory+" &&"
+            + "docker exec " + peer + " bash -c '"+
+            "export CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/mspAdmin && " +
+            "peer lifecycle chaincode install /etc/hyperledger/fabric/mycc.tar.gz'");
+        
 
         String policy="OR('" + org_name + ".member')";
         //Approve and commit chaincode
+        String packageId = getPackageId(peer);
         executeWSLCommand(
             "cd " + mainDirectory + " && " +
-            "docker exec " + peers.get(0) + " bash -c '" +
+            "docker exec " + peer + " bash -c '" +
             "export CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/mspAdmin && " +
             "peer lifecycle chaincode approveformyorg " +
             "-o orderer1.example.com:7050 " +
@@ -3564,15 +3598,15 @@ public class Blockchain {
             "--name mycc " +
             "--version 1.0 " +
             "--sequence 1 " +
-            //"--init-required " +
-            "--package-id mycc:1.0'"
+            "--init-required " +
+            "--package-id " + packageId + " " + "'"
         );
 
 
         
 
         executeWSLCommand("cd "+mainDirectory+" &&"
-                + "docker exec " + peers.get(0) + " bash -c '"
+                + "docker exec " + peer + " bash -c '"
                 +"export CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/mspAdmin && "
                 + "peer lifecycle chaincode commit "
                 +"-o orderer1.example.com:7050 "
@@ -3581,8 +3615,8 @@ public class Blockchain {
                 +"--name mycc "
                 +"--version 1.0 " 
                 +"--sequence 1 "
-                //+"--init-required "
-                +"--peerAddresses "+peers.get(0)+":"+peer_ports.get(0)+" "
+                +"--init-required "
+                +"--peerAddresses "+peer+":"+port+" "
                 +"--tlsRootCertFiles /etc/hyperledger/fabric/tls/tls-ca-cert.pem '");
 
         //Invoke chaincode
@@ -3654,8 +3688,27 @@ public class Blockchain {
     private static void writeChaincode(){
         executeWSLCommand("cp $PWD/src/main/java/com/blockchain/blockchain/atcc.go "+mainDirectory+"/atcc/atcc.go");
     }
+
+    public static String getPackageId(String containerName) {
+        // Esegue il comando per interrogare i chaincode installati
+        String command = "docker exec " + containerName + " bash -c 'export CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/mspAdmin && peer lifecycle chaincode queryinstalled'";
+        String output = executeWSLCommandToString(command);
+
+        // L'output tipico è: 
+        // Package ID: mycc_1.0:ec4f844c02155a1d4b139a16062ccdafcd89ee8d647041f55202ef21335128b7, Label: mycc_1.0
+        
+        if (output.contains("Package ID: ")) {
+            int start = output.indexOf("Package ID: ") + "Package ID: ".length();
+            int end = output.indexOf(",", start);
+            return output.substring(start, end).trim();
+        }
+        
+        return null; // O gestisci l'errore se non trovato
+    }
     
 }
+
+
 
 
 
