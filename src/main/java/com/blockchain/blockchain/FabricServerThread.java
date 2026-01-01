@@ -13,14 +13,13 @@ public class FabricServerThread extends Thread{
     String directory;
     String mainDir;
     public FabricServerThread(int i, String mainDir){
-        directory=Blockchain.fabric_ca_server_name;
         this.mainDir=mainDir;
         this.start();
     }
     
     public void run(){
-        Blockchain.executeWSLCommand("cd "+mainDir+"/"+directory+" &&"
-                + "docker compose up -d");
+        Blockchain.executeWSLCommand("cd "+mainDir+"/fabric-ca-server-tls &&"
+                + "docker compose up -d ca_server");
     }
     
     

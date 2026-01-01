@@ -10,15 +10,15 @@ package com.blockchain.blockchain;
  */
 public class ordererThread extends Thread {
     String mainDir;
-    public ordererThread(String mainDir){
+    String name;
+    public ordererThread(String mainDir, String name){
         this.mainDir=mainDir;
+        this.name=name;
         this.start();
     }
     
     public void run(){
         Blockchain.executeWSLCommand("cd "+mainDir+" &&"
-                + "docker compose down");
-        Blockchain.executeWSLCommand("cd "+mainDir+" &&"
-                + "docker compose up -d");
+                + "docker compose up -d "+name);
     }
 }

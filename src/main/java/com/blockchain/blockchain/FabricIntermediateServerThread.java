@@ -18,9 +18,7 @@ public class FabricIntermediateServerThread extends Thread{
     
     public void run(){
         Blockchain.executeWSLCommand("cd "+mainDir+" &&"
-                + "docker compose down");
-        Blockchain.executeWSLCommand("cd "+mainDir+" &&"
-                + "docker compose up -d");
+                + "docker compose up -d int-ca");
         
     }
 }

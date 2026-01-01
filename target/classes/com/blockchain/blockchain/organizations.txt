@@ -1,0 +1,1 @@
+{"organization_name":"org2","peers":["peer1.org2","peer2.org2","peer3.org2"],"peer_ports":[10051,10052],"projectName":"Project","peers_channels":["channel2","appchannel"]}

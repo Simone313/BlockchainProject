@@ -23,9 +23,7 @@ public class FabricOrganizationServerThread extends Thread{
     
     public void run(){
         Blockchain.executeWSLCommand("cd "+mainDir+"/"+directory+" &&"
-                + "docker compose down");
-        Blockchain.executeWSLCommand("cd "+mainDir+"/"+directory+" &&"
-                + "docker compose up -d");
+                + "docker compose up -d fabric-ca-server-org1");
        
     }
 }
