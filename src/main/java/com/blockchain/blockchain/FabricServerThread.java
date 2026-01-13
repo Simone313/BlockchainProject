@@ -19,7 +19,7 @@ public class FabricServerThread extends Thread{
     
     public void run(){
         Blockchain.executeWSLCommand("cd "+mainDir+"/fabric-ca-server-tls &&"
-                + "docker compose up -d ca_server");
+                + "docker compose up -d tls-ca");
     }
     
     

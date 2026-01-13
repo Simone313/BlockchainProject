@@ -11,6 +11,7 @@ package com.blockchain.blockchain;
  *
  * @author simo0
  */
+import java.sql.*;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.DumperOptions;
 import java.io.*;
@@ -38,7 +39,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 public class Blockchain {
     
 
-    static LinkedList<ServerCA> server_list= new LinkedList<ServerCA>();
     static String mainDirectory;
     static boolean intermediate=false;
     static String admin_name;
@@ -109,7 +109,8 @@ public class Blockchain {
                         }
                         mainDirectory= prjs.get(select-1);
                         if(!checkContainersRunning()){
-                            startingUpContainers();
+                            executeWSLCommand("cd "+ mainDirectory+" && "
+                                + "docker compose start");
                         }
 
                         
@@ -312,53 +313,7 @@ public class Blockchain {
         
     }
 
-    public static void startingUpContainers() throws IOException{
-        LinkedList<String> peers_names= new LinkedList<String>();
-        LinkedList<Integer> ports= new LinkedList<Integer>();
-        LinkedList<String> channels= new LinkedList<String>();
-        executeWSLCommand("cd "+ mainDirectory+" && "
-                                + "docker compose start");
-        LinkedList<organization> orgs= getOrganizationsCreated();
-        for(int i=0;i<orgs.size();i++){
-            if(mainDirectory.equals((orgs.get(i).getProjectName()))){
-                peers_names= orgs.get(i).getPeers();
-                ports= orgs.get(i).getPeer_ports();
-                channels= orgs.get(i).getPeers_channels();
-            }
-        }
-        /*for(int i=0;i<peers_names.size();i++){
-            executeWSLCommand("docker exec " + peers_names.get(i) + " bash -c '"
-                                    + "peer channel fetch 0 "+channels.get(i)+"_block.pb -o " + orderer_name + ":" + orderer_port + " -c "+channels.get(i)+" --tls --cafile /etc/hyperledger/fabric/tls/tls-ca-cert.pem'");
-            executeWSLCommand("docker exec " + peers_names.get(i) + " bash -c '"
-                + "export CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/mspAdmin && "
-                + "peer channel join -b "+channels.get(i)+"_block.pb'");
-        
-            executeWSLCommand(
-                "cd "+mainDirectory+" && " +
-                    "export CORE_PEER_LOCALMSPID="+org_name+" && " +
-                    "export CORE_PEER_MSPCONFIGPATH=$PWD/"+mainDirectory+"/organizations/peerOrganizations/"+org_name+"/msp && " +
-                    "export CORE_PEER_ADDRESS="+ peers_names.get(i) +":"+ports.get(i)+" && " +
-                    "export CORE_PEER_TLS_ENABLED=true && "+
-                    "export FABRIC_CFG_PATH=$PWD/"+mainDirectory+"/peers_bin/"+ peers_names.get(i) +"/config/ && " +      
-                    "./peer lifecycle chaincode package mycc.tar.gz " +
-                    "--path $PWD/"+mainDirectory+"/atcc " +
-                    "--lang golang " +
-                    "--label mycc_1.0" 
-            );
-
-            //Install chaincode
-
-            executeWSLCommand("docker cp $PWD/"+mainDirectory+"/mycc.tar.gz "+peers_names.get(i)+":/etc/hyperledger/fabric");
-            executeWSLCommand("cd "+mainDirectory+" &&"
-                + "docker exec " + peers_names.get(i) + " bash -c '"+
-                "export CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/mspAdmin && " +
-                "peer lifecycle chaincode install /etc/hyperledger/fabric/mycc.tar.gz'");
-        }*/
-            
-
-        
-        
-    }
+    
 
     
     private static boolean isDockerRunning() throws IOException, InterruptedException {
@@ -427,6 +382,40 @@ public class Blockchain {
         }else{
             System.out.println("aria2 already installed. ");
         }
+
+        if(executeWSLCommandToString("cd "+ mainDirectory +" && which sqlite3").length()==0){
+            String remoteCmd = "cd '" + mainDirectory + "' && apt update && apt install -y sqlite3";
+
+            // Chiamiamo wsl.exe e passiamo sudo -S sh -c ... come argomenti: la shell interna gestirà il cd e apt.
+            ProcessBuilder pb = new ProcessBuilder(
+                "wsl.exe", "--", "sudo", "-S", "sh", "-c", remoteCmd
+            );
+
+            // opzionale: eredita env / o setta working dir locale
+            pb.redirectErrorStream(true); // unisce stderr a stdout
+
+            Process p = pb.start();
+
+            // SCRIVO la password su stdin del processo (sudo leggerà da stdin)
+            try (OutputStream os = p.getOutputStream()) {
+                os.write((pin + "\n").getBytes(StandardCharsets.UTF_8));
+                os.flush();
+                // non chiudere immediatamente se il processo può chiedere altro input; qui va bene chiudere
+            }
+
+            // Leggo l'output (stdout + stderr)
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    System.out.println(line);
+                }
+            }
+            int exit = p.waitFor();
+            System.out.println("Exit code: " + exit);
+        }else{
+            System.out.println("sqlite3 already installed. ");
+        }
+
         
         if(executeWSLCommandToString("cd "+ mainDirectory +" && ls").contains("fabric-ca-client") && executeWSLCommandToString("cd "+ mainDirectory +" && ls").contains("fabric-ca-server-tls")){
             System.out.println("Binaries alrady installed");
@@ -449,30 +438,46 @@ public class Blockchain {
             waitForContainer(tls_ca_name);
 
             enrollRequestToCAServer(0);
+            restartCAserverWithTLS();
             enrollCAAdmin(0);
+            String userName=registerNewIdentity(0);
+            deployOrganizationCA(0, userName);
+            new FabricOrganizationServerThread(0,mainDirectory);
+            waitForContainer(org_ca_name);
+
+            executeWSLCommand("cd "+Blockchain.mainDirectory+"/fabric-ca-client &&"
+                + "./fabric-ca-client enroll -d -u https://"+org_name+":"+org_psw+"@localhost:7055 "
+                +"--tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "
+                +"--csr.hosts 'localhost,tls-ca,127.0.0.1' "
+                +"--mspdir $(pwd)/"+mainDirectory+"/fabric-ca-client/org1-ca/rcaadmin/msp");
             System.out.println(GREEN+"Do you want to deploy an Intermediate CA? y/n"+RESET);
             if(in.next().equals("y")){
                 intermediate=true;
                 registerIntermediateCAAdmin(0);
                 
             }
-            String userName=registerNewIdentity(0);
-            deployOrganizationCA(0, userName);
-            new FabricOrganizationServerThread(0,mainDirectory);
-            waitForContainer(org_ca_name);
             
             
-            executeWSLCommand("cd "+Blockchain.mainDirectory+"/fabric-ca-client &&"
-                + "./fabric-ca-client enroll -d -u https://"+org_name+":"+org_psw+"@localhost:7055 --tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-server-org1/tls/cert.pem --csr.hosts '"+server_list.get(0).getCsrHosts().get(0)+","+server_list.get(0).getCsrHosts().get(1)+"' --mspdir $(pwd)/"+mainDirectory+"/fabric-ca-client/org1-ca/rcaadmin/msp");
+            
+            
 
             
             if(intermediate){
+                executeWSLCommand("cp "+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "+mainDirectory+"/fabric-ca-server-int-ca/");
                 deployIntermediateCA();
                 new FabricIntermediateServerThread(mainDirectory);
                 waitForContainer(int_ca_name);
+                addIcaadminToDB();
                 
-                executeWSLCommand("cd "+Blockchain.mainDirectory+"/fabric-ca-client &&"
-                + "./fabric-ca-client enroll -d -u https://"+icaadmin_name+":"+icaadmin_psw+"@localhost:7056 --tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-server-int-ca/tls/cert.pem --csr.hosts '"+server_list.get(0).getCsrHosts().get(0)+","+server_list.get(0).getCsrHosts().get(1)+"' --mspdir $(pwd)/"+mainDirectory+"/fabric-ca-client/int-ca/icaadmin/msp");
+                
+
+                executeWSLCommand("cat " + mainDirectory + "/fabric-ca-server-int-ca/ca-cert.pem "
+                    + mainDirectory + "/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "
+                    + "> " + mainDirectory + "/fabric-ca-server-int-ca/ca-chain.pem");
+
+                // 3. COPIA E RIAVVIA IL SERVER (Oppure avvialo se era fermo)
+                executeWSLCommand("docker cp " + mainDirectory + "/fabric-ca-server-int-ca/ca-chain.pem int-ca:/etc/hyperledger/fabric-ca-server/ca-chain.pem");
+                executeWSLCommand("docker restart int-ca");
 
             }
             
@@ -486,7 +491,6 @@ public class Blockchain {
     
     /**
      * Effettua la richiesta di enrollment al CA server per il node specificato.
-     * @param i indice del server in server_list
      */
     private static void enrollRequestToCAServer(int i){
         executeWSLCommand("cd "+ mainDirectory +"/fabric-ca-client/tls-ca &&"
@@ -494,27 +498,84 @@ public class Blockchain {
                 + "cd tlsadmin &&"
                 + "mkdir msp");
         executeWSLCommand("cd "+ mainDirectory +"/fabric-ca-client &&"
-                + "./fabric-ca-client enroll -d -u https://"+server_list.get(i).getAdmin()+":"+server_list.get(i).getAdminPwd()+"@127.0.0.1:7054 --tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem --enrollment.profile tls --mspdir "+ mainDirectory +"/fabric-ca-client/tls-ca/tlsadmin/msp");
+                + "./fabric-ca-client enroll -d -u http://admin:adminPsw@127.0.0.1:7054 "
+                + "--enrollment.profile tls "
+                + "--csr.hosts 'localhost,127.0.0.1,tls-ca' "
+                + "--tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-server-tls/ca-cert.pem "
+                + "--mspdir $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-ca/tlsadmin/msp");
+        executeWSLCommand("mv $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-ca/tlsadmin/msp/keystore/*_sk "
+                + "$(pwd)/"+mainDirectory+"/fabric-ca-client/tls-ca/tlsadmin/msp/keystore/CA_PRIVATE_KEY");
+    }
+
+    private static void restartCAserverWithTLS(){
+        File server_config=new File(""+ mainDirectory +"/fabric-ca-server-tls/fabric-ca-server-config.yaml");
+        Yaml yaml= new Yaml();
+        try {
+            Map<String, Object> data= yaml.load(new FileReader(server_config));
+            Map<String,Object> tls=(Map<String,Object>) data.get("tls");
+            tls.put("enabled",true);
+            tls.put("certfile", "/etc/hyperledger/fabric-ca-client/tls-ca/tlsadmin/msp/signcerts/cert.pem");
+            tls.put("keyfile", "/etc/hyperledger/fabric-ca-client/tls-ca/tlsadmin/msp/keystore/CA_PRIVATE_KEY");
+
+            Map<String,Object> ca= (Map<String,Object>) data.get("ca");
+            ca.put("certfile","/etc/hyperledger/fabric-ca-server/ca-cert.pem");
+            ca.put("keyfile", "/etc/hyperledger/fabric-ca-server/msp/keystore/CA_PRIVATE_KEY");
+            //Writing
+            DumperOptions options = new DumperOptions();
+            options.setIndent(2);
+            options.setPrettyFlow(true);
+            options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+            Yaml yamlWriter = new Yaml(options);
+
+            try (FileWriter writer = new FileWriter(server_config)) {
+                yamlWriter.dump(data, writer);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            System.out.println("Config updated");
+        } catch (FileNotFoundException e) {
+            
+        }
+
+        executeWSLCommand("cd "+ mainDirectory +" &&"
+                + "docker compose restart tls-ca");
     }
     
     /**
      * Esegue l'enrollment dell'amministratore del CA locale sul server indicato.
-     * @param i indice del server in server_list
      */
     private static void enrollCAAdmin(int i) {
-    String caAdmin = server_list.get(i).getAdmin();
-    String caAdminPwd = server_list.get(i).getAdminPwd();
-    
-    String fabricCaClientDir = mainDirectory + "/fabric-ca-client";
-    String clientHome = fabricCaClientDir + "/tls-ca/rcaadmin";
-    executeWSLCommand("mkdir -p " + fabricCaClientDir + "/tls-ca/rcaadmin/msp");
-    String enrollCmd =
-    "export FABRIC_CA_CLIENT_HOME=$(pwd)/"+mainDirectory+"/fabric-ca-client/tls-ca/rcaadmin &&" +
-    "cd " + mainDirectory + "/fabric-ca-client && " +
-    "./fabric-ca-client enroll -d " +
-    "-u https://" + caAdmin + ":" + caAdminPwd + "@127.0.0.1:7054 " +
-    "--tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem";
-    executeWSLCommand(enrollCmd);
+        String caAdmin = "admin";
+        String caAdminPwd = "adminPsw";
+        
+        String fabricCaClientDir = mainDirectory + "/fabric-ca-client";
+        String clientHome = fabricCaClientDir + "/tls-ca/rcaadmin";
+        executeWSLCommand("mkdir -p " + fabricCaClientDir + "/tls-ca/rcaadmin/msp");
+        executeWSLCommand("cd "+mainDirectory+"/fabric-ca-client && "
+            +"export FABRIC_CA_CLIENT_HOME=$(pwd)/"+mainDirectory+"/fabric-ca-client/tls-ca/tlsadmin && "
+            +"./fabric-ca-client register "
+                + "-u https://127.0.0.1:7054 "
+                + "--tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "
+                + "--id.name rcaadmin "
+                + "--id.secret rcaadminPsw "
+                + "--id.type admin "
+                + "--id.attrs \"hf.Registrar.Roles=client\" "
+                + "--id.attrs \"hf.Registrar.Roles=peer\" "
+                + "--id.attrs \"hf.Registrar.Roles=orderer\" "
+                + "--id.attrs \"hf.Registrar.Roles=admin\" "
+                + "--id.attrs \"hf.Registrar.Roles=ca\" "
+                + "--id.attrs \"hf.Registrar.Attributes=*\" "
+                + "--id.attrs \"hf.IntermediateCA=true\" "
+                + "--id.attrs \"hf.Revoker=true\""
+            );
+        String enrollCmd =
+        "cd " + mainDirectory + "/fabric-ca-client && " +
+        "./fabric-ca-client enroll " +
+        "-u https://rcaadmin:rcaadminPsw@127.0.0.1:7054 " +
+        "--tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "+
+        "--csr.hosts localhost,127.0.0.1 "+
+        "--mspdir $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-ca/rcaadmin/msp";
+        executeWSLCommand(enrollCmd);
     
     
     }
@@ -572,31 +633,84 @@ public class Blockchain {
                 + "mkdir icaadmin &&"
                 + "cd icaadmin &&"
                 + "mkdir msp");
-        Scanner in = new Scanner(System.in);
-        System.out.print(GREEN+"Intermediate CA admin name: "+RESET);
-        icaadmin_name= in.next();
-        System.out.print(GREEN+"Intermediate CA admin password: "+RESET);
-        icaadmin_psw= in.next();
-        String server_name= "fabric-ca-server-int-ca";
+        icaadmin_name= "icaadmin";
+        icaadmin_psw= "icaadminPsw";
         
+        executeWSLCommand("mkdir "+mainDirectory+"/fabric-ca-client/int-ca/icaadmin");
+        executeWSLCommand("cd " + mainDirectory + "/fabric-ca-client && "
+            +"export FABRIC_CA_CLIENT_HOME=$(pwd)/"+mainDirectory+"/fabric-ca-client/tls-ca/tlsadmin && "
+            + "./fabric-ca-client register -d "
+            + "-u https://127.0.0.1:7054 "
+            + "--tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "
+            + "--id.name icaadmin --id.secret icaadminPsw "
+            + "--id.type admin " 
+            + "--id.attrs \"hf.IntermediateCA=true:ecert\"");
         
-        executeWSLCommand("mkdir "+mainDirectory+"/febric-ca-client/int-ca/rcaadmin");
-        executeWSLCommand("cd "+ mainDirectory +"/fabric-ca-client &&"
-                + "export FABRIC_CA_CLIENT_HOME=$(pwd)/int-ca/rcaadmin &&"
-                + "./fabric-ca-client register -d --id.name "+icaadmin_name+" --id.secret "+icaadmin_psw+" -u https://127.0.0.1:7054 --tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem --mspdir $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-ca/tlsadmin/msp");
-        executeWSLCommand("cd "+ mainDirectory +"/fabric-ca-client &&"
-                + "export FABRIC_CA_CLIENT_HOME=$(pwd) &&"
-                + "./fabric-ca-client enroll -d -u https://"+icaadmin_name+":"+icaadmin_psw+"@127.0.0.1:7054 --tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem --csr.hosts '"+server_list.get(i).getCsrHosts().get(0)+","+server_list.get(i).getCsrHosts().get(1)+"' --mspdir "+ mainDirectory +"/fabric-ca-client/tls-ca/icaadmin/msp");
-        
-        String old_name=executeWSLCommandToString("find $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-ca/icaadmin/msp/keystore -name '*_sk'");
+        executeWSLCommand("cd " + mainDirectory + "/fabric-ca-client && "
+            + "./fabric-ca-client enroll -d "
+            + "-u https://icaadmin:icaadminPsw@127.0.0.1:7054 "
+            + "--tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "
+            + "--csr.hosts '127.0.0.1,localhost' "
+            + "--mspdir $(pwd)/"+mainDirectory+"/fabric-ca-server-int-ca/icaadmin/msp "
+            + "--enrollment.profile ca"
+        );     
+        String old_name=executeWSLCommandToString("find $(pwd)/"+mainDirectory+"/fabric-ca-server-int-ca/icaadmin/msp/keystore -name '*_sk'");
         System.out.println("old_name:"+old_name);
-        executeWSLCommand("mv "+old_name+" $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-ca/icaadmin/msp/keystore/CA_PRIVATE_KEY");
+        executeWSLCommand("mv "+old_name+" $(pwd)/"+mainDirectory+"/fabric-ca-server-int-ca/icaadmin/msp/keystore/CA_PRIVATE_KEY");
         
-        executeWSLCommand("cd "+mainDirectory+" &&"
-                + "mkdir -p "+server_name+"/tls &&"
-                + "cp bin/fabric-ca-server "+server_name+" &&"
-                + "cp $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-ca/icaadmin/msp/signcerts/cert.pem $(pwd)/"+mainDirectory+"/"+server_name+"/tls && cp $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-ca/icaadmin/msp/keystore/CA_PRIVATE_KEY $(pwd)/"+mainDirectory+"/"+server_name+"/tls &&"
-                + "cp $(pwd)/"+mainDirectory+"/fabric-ca-server-tls/ca-cert.pem $(pwd)/"+mainDirectory+"/"+server_name+"/tls/tls-ca-cert.pem");
+
+        /*executeWSLCommand("cd "+mainDirectory+" &&"
+                + "mkdir -p fabric-ca-server-int-ca/msp fabric-ca-server-int-ca/tls &&"
+                + "cp bin/fabric-ca-server fabric-ca-server-int-ca &&"
+                + "cp $(pwd)/"+mainDirectory+"/fabric-ca-client/int-ca/icaadmin/msp/signcerts/cert.pem $(pwd)/"+mainDirectory+"/fabric-ca-server-int-ca/msp && cp $(pwd)/"+mainDirectory+"/fabric-ca-client/int-ca/icaadmin/msp/keystore/CA_PRIVATE_KEY $(pwd)/"+mainDirectory+"/fabric-ca-server-int-ca/msp &&"
+                + "cp $(pwd)/"+mainDirectory+"/fabric-ca-server-tls/ca-cert.pem $(pwd)/"+mainDirectory+"/fabric-ca-server-int-ca/tls/tls-ca-cert.pem");
+        */
+        
+    }
+
+    private static void addIcaadminToDB() {
+        String selectSQL = "SELECT * FROM certificates WHERE id = 'icaadmin'";
+
+        // Nota i nomi file: fabric-ca-server.db (con trattino) vs fabric_ca_server.db (con underscore)
+        // Assicurati che siano quelli corretti nel tuo filesystem
+        try (Connection rootConn = DriverManager.getConnection("jdbc:sqlite:" + mainDirectory + "\\fabric-ca-server-tls\\fabric-ca-server.db");
+            Connection intConn = DriverManager.getConnection("jdbc:sqlite:" + mainDirectory + "\\fabric-ca-server-int-ca\\fabric-ca-server.db");
+            Statement stmt = rootConn.createStatement();
+            ResultSet rs = stmt.executeQuery(selectSQL)) {
+
+            if (rs.next()) {
+                // MATCHING DELLE COLONNE CON LA TUA IMMAGINE:
+                // Vedo: id, serial_number, authority_key_identifier, ca_label, status, reason, expiry, revoked_at, pem, level
+                String insertSQL = "INSERT OR REPLACE INTO certificates " +
+                                "(id, serial_number, authority_key_identifier, ca_label, status, " +
+                                "reason, expiry, revoked_at, pem, level) " +
+                                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+                try (PreparedStatement pstmt = intConn.prepareStatement(insertSQL)) {
+                    pstmt.setString(1, rs.getString("id"));
+                    pstmt.setString(2, rs.getString("serial_number"));
+                    pstmt.setString(3, rs.getString("authority_key_identifier"));
+                    pstmt.setString(4, rs.getString("ca_label"));
+                    pstmt.setString(5, rs.getString("status"));
+                    pstmt.setInt(6, rs.getInt("reason"));
+                    
+                    // Usiamo getString o getTimestamp a seconda di come SQLite ha memorizzato la data
+                    pstmt.setString(7, rs.getString("expiry")); 
+                    pstmt.setString(8, rs.getString("revoked_at"));
+                    
+                    pstmt.setString(9, rs.getString("pem"));
+                    pstmt.setInt(10, rs.getInt("level"));
+
+                    pstmt.executeUpdate();
+                    System.out.println("Certificato icaadmin copiato con successo!");
+                }
+            } else {
+                System.err.println("Errore: icaadmin non trovato nel database sorgente (Root CA).");
+            }
+        } catch (SQLException e) {
+            System.err.println("Errore SQL: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
     
     
@@ -610,20 +724,16 @@ public class Blockchain {
                 "  fabric_network:\n" +
                 "    driver: bridge\n" +
                 "services:\n" +
-                "  ca_server:\n" +
+                "  tls-ca:\n" +
                 "    image: hyperledger/fabric-ca:1.5.15\n" +
                 "    container_name: "+tls_ca_name+"\n" +
                 "    ports:\n" +
                 "      - \"7054:7054\"\n" +
                 "    environment:\n" +
                 "      - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server\n" +
-                "      - FABRIC_CA_SERVER_CSR_CN=tls-ca\n" +
-                "      - FABRIC_CA_SERVER_CA_NAME=ca-server\n" +
-                "      - FABRIC_CA_SERVER_TLS_ENABLED=true\n" +
-                "      - FABRIC_CA_SERVER_TLS_CERTFILE=/etc/hyperledger/fabric-ca-server/ca-cert.pem\n" +
-                "      - FABRIC_CA_SERVER_TLS_KEYFILE=/etc/hyperledger/fabric-ca-server/msp/keystore/CA_PRIVATE_KEY\n" +
                 "    volumes:\n" +
                 "      - $(pwd)/"+mainDirectory+"/fabric-ca-server-tls:/etc/hyperledger/fabric-ca-server\n"+
+                "      - $(pwd)/"+mainDirectory+"/fabric-ca-client:/etc/hyperledger/fabric-ca-client\n"+
                 "      - $(pwd)/"+mainDirectory+"/fabric-ca-server-tls/fabric-ca-server-config.yaml:/etc/hyperledger/fabric-ca-server/fabric-ca-server-config.yaml\n" +
                 "    command: sh -c 'fabric-ca-server start -b"+ admin_name+":"+admin_pwd+" -d'\n"+
                 "EOF");
@@ -640,19 +750,19 @@ public class Blockchain {
             executeWSLCommand("cd "+ mainDirectory +" &&"
                 + "mkdir fabric-ca-server-tls &&"
                 + "cp bin/fabric-ca-server fabric-ca-server-tls");
-            Scanner in = new Scanner(System.in);
             //System.out.println("-----------ADMIN REGISTRATION-----------");
             //System.out.print("Admin's name: ");
             admin_name="admin";
             //System.out.print("Admin's password: ");
             admin_pwd="adminPsw";
-            executeWSLCommand("cd "+ mainDirectory +"/fabric-ca-server-tls &&"
-                    + "./fabric-ca-server init -b "+admin_name+":"+admin_pwd+" --csr.hosts localhost,127.0.0.1");
-            executeWSLCommand("cp "+ mainDirectory +"/fabric-ca-server-tls/ca-cert.pem "+ mainDirectory +"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem");
-            //executeWSLCommand("cp "+ mainDirectory +"/fabric-ca-server-tls/ca-cert.pem "+ mainDirectory +"/fabric-ca-server-tls/msp/keystore/tls-ca-cert.pem");
-            String old_name=executeWSLCommandToString("find $(pwd)/"+mainDirectory+"/fabric-ca-server-tls/msp -name '*_sk'");
-            executeWSLCommand("mv "+old_name+" $(pwd)/"+mainDirectory+"/fabric-ca-server-tls/msp/keystore/CA_PRIVATE_KEY");
+            
             //System.out.println(GREEN+"------Modify the TLS CA server configuration------"+RESET);
+            executeWSLCommand("cp fabric-ca-server-config.yaml "+mainDirectory+"/fabric-ca-server-tls/");
+            
+
+            executeWSLCommand("cp "+mainDirectory+"/fabric-ca-server-tls/fabric-ca-server-config.yaml "+mainDirectory);
+
+
             
             
             //CA
@@ -665,16 +775,17 @@ public class Blockchain {
             ca.put("name", tls_ca_name);
             
             
-            
+            data.remove("intermediate");
 
 
+            //registry
             
 
             //TLS
             Map<String,Object> tls=(Map<String,Object>) data.get("tls");
-            tls.put("enabled",true);
-            tls.put("certfile", "/etc/hyperledger/fabric-ca-server-config/ca-cert.pem");
-            tls.put("keyfile", "/etc/hyperledger/fabric-ca-server-config/msp/keystore/CA_PRIVATE_KEY");
+            tls.put("enabled",false);
+            //tls.put("certfile", "/etc/hyperledger/fabric-ca-server-config/ca-cert.pem");
+            //tls.put("keyfile", "/etc/hyperledger/fabric-ca-server-config/msp/keystore/CA_PRIVATE_KEY");
             //Map<String,Object> tls_clientauth=(Map<String,Object>) tls.get("clientauth");
 
 
@@ -687,12 +798,17 @@ public class Blockchain {
                 tls_clientauth.put("type", "RequireAndVerifyClientCert");
             }
 
-            tls_clientauth.put("certfiles", "ca-cert.pem");
+            //tls_clientauth.put("certfiles", "ca-cert.pem");
+            
+            //Profile CA
+            Map<String,Object> caconstraint= (Map<String,Object>) ((Map<String,Object>) ((Map<String,Object>) ((Map<String,Object>) data.get("signing")).get("profiles")).get("ca")).get("caconstraint");
+            caconstraint.put("maxpathlen",0);
+            
+            //csr
+            Map<String,Object> csr_ca=(Map<String,Object>)((Map<String,Object>)data.get("csr")).get("ca");
+            csr_ca.put("pathlength", 1);
             
             
-            
-            
-            //INTERMEDIATE CA
             
             
             //PORT
@@ -707,9 +823,8 @@ public class Blockchain {
             db.put("type", "sqlite3");
             
             Map<String, Object> csr = (Map<String, Object>) data.get("csr");
-
-            ArrayList<String> hosts = (ArrayList<String>) csr.get("hosts");
-            server_list.add(new ServerCA(admin_name, admin_pwd, server_port, hosts));
+            csr.put("cn", "tls-ca");
+            csr.put("hosts", Arrays.asList("localhost","tls-ca","127.0.0.1"));
             
             //Writing
             DumperOptions options = new DumperOptions();
@@ -725,6 +840,17 @@ public class Blockchain {
         }catch(Exception e){
             System.err.println(e.toString());
         }
+        executeWSLCommand(
+            "cd "+ mainDirectory +"/fabric-ca-server-tls && " +
+            "./fabric-ca-server init " +
+            "-b "+admin_name+":"+admin_pwd
+        );
+
+        executeWSLCommand("cp "+ mainDirectory +"/fabric-ca-server-tls/ca-cert.pem "+ mainDirectory +"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem");
+        //executeWSLCommand("cp "+ mainDirectory +"/fabric-ca-server-tls/ca-cert.pem "+ mainDirectory +"/fabric-ca-server-tls/msp/keystore/tls-ca-cert.pem");
+        String old_name=executeWSLCommandToString("find $(pwd)/"+mainDirectory+"/fabric-ca-server-tls/msp -name '*_sk'");
+        executeWSLCommand("mv "+old_name+" $(pwd)/"+mainDirectory+"/fabric-ca-server-tls/msp/keystore/CA_PRIVATE_KEY");
+        
         
     }
     
@@ -746,7 +872,9 @@ public class Blockchain {
         
         
         executeWSLCommand("cd "+mainDirectory+"/"+server_name+" &&"
-                + "./fabric-ca-server init -b "+org_name+":"+org_psw);
+                + "./fabric-ca-server init -b "+org_name+":"+org_psw
+                +" --csr.hosts localhost,127.0.0.1"
+            );
         String old_name=executeWSLCommandToString("find $(pwd)/"+mainDirectory+"/fabric-ca-server-tls/org1-server-tls/keystore -name '*_sk'");
             executeWSLCommand("mv "+old_name+" $(pwd)/"+mainDirectory+"/fabric-ca-server-tls/org1-server-tls/keystore/ORG1_PRIVATE_KEY");
         executeWSLCommand("cp $(pwd)/"+mainDirectory+"/fabric-ca-server-tls/org1-server-tls/signcerts/cert.pem $(pwd)/"+mainDirectory+"/fabric-ca-server-org1/tls && cp $(pwd)/"+mainDirectory+"/fabric-ca-server-tls/org1-server-tls/keystore/ORG1_PRIVATE_KEY $(pwd)/"+mainDirectory+"/fabric-ca-server-org1/tls ");
@@ -768,8 +896,8 @@ public class Blockchain {
         Map<String,Object> tls=(Map<String,Object>) data.get("tls");
         tls.put("enabled",true);
 
-        tls.put("certfile", "fabric-ca-client/tls-ca/rcaadmin/msp/signcerts/cert.pem");
-        tls.put("keyfile", "fabric-ca-client/tls-ca/rcaadmin/msp/keystore");
+        tls.put("certfile", "/etc/hyperldger/fabric-ca-client/tls-ca/rcaadmin/msp/signcerts/cert.pem");
+        tls.put("keyfile", "/etc/hyperldger/fabric-ca-client/tls-ca/rcaadmin/msp/keystore/"+executeWSLCommandToString("ls "+mainDirectory+"/fabric-ca-client/tls-ca/rcaadmin/msp/keystore/ | grep '_sk'").trim());
 
         //System.out.println(GREEN+"Do you want to activate the mutual TLS option? y/n"+RESET);
         String risp="n";
@@ -795,9 +923,8 @@ public class Blockchain {
         db.put("type", "sqlite3");
         
         Map<String, Object> csr = (Map<String, Object>) data.get("csr");
-
+        csr.put("cn", "org-ca");
         ArrayList<String> hosts = (ArrayList<String>) csr.get("hosts");
-        server_list.add(new ServerCA(admin_name, admin_pwd, server_port, hosts));
 
         //Writing
         DumperOptions options = new DumperOptions();
@@ -837,29 +964,34 @@ public class Blockchain {
         Map<String, Object> caOrg1 = new LinkedHashMap<>();
         caOrg1.put("image", "hyperledger/fabric-ca:1.5.15");
         caOrg1.put("container_name",name);
-        caOrg1.put("environment", Arrays.asList(
-            "FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server",
-            "FABRIC_CA_SERVER_CA_NAME="+name,
-            "FABRIC_CA_SERVER_TLS_ENABLED="+tls,
-            "FABRIC_CA_SERVER_CSR_CN="+name,
-            "FABRIC_CA_SERVER_TLS_CERTFILE=/etc/hyperledger/fabric-ca-server/tls/cert.pem",
-            "FABRIC_CA_SERVER_TLS_KEYFILE=/etc/hyperledger/fabric-ca-server/tls/"+((inter)? "CA_PRIVATE_KEY":"ORG1_PRIVATE_KEY")
-        ));
+        
         
         caOrg1.put("ports", Collections.singletonList(port+":"+port));
-        caOrg1.put("command", "sh -c 'fabric-ca-server start -b "+ admin_name+":"+admin_pwd+" -d'");
+        
+        
         String path=executeWSLCommandToString("echo $(pwd)");
         if(inter){
-            
+            caOrg1.put("environment", Arrays.asList(
+                "FABRIC_CA_SERVER_HOME=/etc/hyperledger/fabric-ca-server",
+                "FABRIC_CA_SERVER_CONFIG=/etc/hyperledger/fabric-ca-server/fabric-ca-server-config.yaml"
+            ));
+            caOrg1.put("command", "sh -c 'fabric-ca-server start -b icaadmin:icaadminPsw -d'");
             caOrg1.put("volumes", Arrays.asList(
+                path + "/" + mainDirectory + "/fabric-ca-client/tls-ca/icaadmin:/etc/hyperledger/fabric-ca-client/icaadmin",
                 path + "/" + mainDirectory + "/fabric-ca-server-int-ca:/etc/hyperledger/fabric-ca-server",
                 path + "/" + mainDirectory + "/fabric-ca-server-int-ca/fabric-ca-server-config.yaml:/etc/hyperledger/fabric-ca-server/fabric-ca-server-config.yaml"
             ));
 
         
         }else{
+            caOrg1.put("environment", Arrays.asList(
+                "FABRIC_CA_SERVER_HOME=/etc/hyperledger/fabric-ca-server",
+                "FABRIC_CA_SERVER_CONFIG=/etc/hyperledger/fabric-ca-server/fabric-ca-server-config.yaml"
+            ));
+            caOrg1.put("command", "sh -c 'fabric-ca-server start -b admin:adminPsw -d'");
             caOrg1.put("volumes", Arrays.asList(
                 path+"/"+mainDirectory+"/fabric-ca-server-org1:/etc/hyperledger/fabric-ca-server",
+                path+"/"+mainDirectory+"/fabric-ca-client:/etc/hyperldger/fabric-ca-client/",
                 path+"/"+mainDirectory+"/fabric-ca-server-org1/fabric-ca-server-config.yaml:/etc/hyperledger/fabric-ca-server/fabric-ca-server-config.yaml"
             ));
 
@@ -884,33 +1016,31 @@ public class Blockchain {
     private static void deployIntermediateCA() throws IOException{
         
         
-        executeWSLCommand("cd "+mainDirectory+"/fabric-ca-server-int-ca &&"
-                + "./fabric-ca-server init -b"+icaadmin_name+":"+icaadmin_psw);
+        executeWSLCommand("cp "+mainDirectory+"/fabric-ca-server-config.yaml "+mainDirectory+"/fabric-ca-server-int-ca/");
                
 
-        String old_name=executeWSLCommandToString("find $(pwd)/"+mainDirectory+"/fabric-ca-server-int-ca/msp -name '*_sk'");
-        executeWSLCommand("mv "+old_name+" $(pwd)/"+mainDirectory+"/fabric-ca-server-int-ca/msp/keystore/CA_PRIVATE_KEY");
-        System.out.println(GREEN+"------Modify the INTERMEDIATE CA server configuration------"+RESET);
+
+        
         Scanner in = new Scanner(System.in);
             //CA
-            System.out.print(GREEN+"Name of this CA: "+RESET);
-            int_ca_name=in.next();
+            int_ca_name="int-ca";
             File server_config=new File(""+ mainDirectory +"/fabric-ca-server-int-ca/fabric-ca-server-config.yaml");
             Yaml yaml= new Yaml();
             Map<String, Object> data= yaml.load(new FileReader(server_config));
+            data.put("port", 7056);
             Map<String,Object> ca=(Map<String,Object>) data.get("ca");
             ca.put("name", int_ca_name);
-            
+            ca.put("chainfile", "/etc/hyperledger/fabric-ca-server/ca-chain.pem");
+            ca.put("trustedroots", Arrays.asList("/etc/hyperledger/fabric-ca-server/tls-ca-cert.pem"));
             
             //TLS
             Map<String,Object> tls=(Map<String,Object>) data.get("tls");
             tls.put("enabled",true);
 
-            tls.put("certfile", "fabric-ca-client/tls-ca/rcaadmin/msp/signcerts/cert.pem");
-            tls.put("keyfile", "fabric-ca-client/tls-ca/rcaadmin/msp/keystore");
+            tls.put("certfile", "/etc/hyperledger/fabric-ca-server/icaadmin/msp/signcerts/cert.pem");
+            tls.put("keyfile", "/etc/hyperledger/fabric-ca-server/icaadmin/msp/keystore/CA_PRIVATE_KEY");
 
-            System.out.println(GREEN+"Do you want to activate the mutual TLS option? y/n"+RESET);
-            String risp=in.next();
+            String risp="n";
             if(risp.equals("n")){
             }else{
                 Map<String,Object> tls_clientauth= (Map<String,Object>) tls.get("clientauth");
@@ -918,10 +1048,25 @@ public class Blockchain {
             }
             
             
+            //intermediate
+            Map<String,Object> intermediate=(Map<String,Object>) data.get("intermediate");
+            intermediate.put("parentserver", Map.of(
+                "url", "https://icaadmin:icaadminPsw@tls-ca:7054",
+                "caname", "tls-ca"
+            ));
             
+            Map<String,Object> enrollment=(Map<String,Object>) intermediate.get("enrollment");
+            enrollment.put("hosts", Arrays.asList("localhost","int-ca"));
+            enrollment.put("profile", "ca");
+
+            Map<String,Object> inter_tls=(Map<String,Object>) intermediate.get("tls");
+            inter_tls.put("certfiles", "/etc/hyperledger/fabric-ca-server/tls-ca-cert.pem");
             
-            
-            
+            data.put("no_verify", true);
+            Map<String, Object> tlsMap = (Map<String, Object>) data.get("tls");
+            Map<String, Object> clientMap = new LinkedHashMap<>();
+            clientMap.put("skiphostverify", true);
+            tlsMap.put("client", clientMap);
             //PORT
             inter_port=7056;
             while(ports_used.contains(inter_port)){
@@ -930,7 +1075,10 @@ public class Blockchain {
             
             ports_used.add(inter_port);
             data.put("ports", inter_port);
+
             
+            Map<String,Object> csr_ca=(Map<String,Object>)((Map<String,Object>)data.get("csr")).get("ca");
+            csr_ca.put("pathlength", 0);
             //DB
             Map<String,Object> db=(Map<String,Object>) data.get("db");
             db.put("type", "sqlite3");
@@ -938,8 +1086,7 @@ public class Blockchain {
             Map<String, Object> csr = (Map<String, Object>) data.get("csr");
 
             ArrayList<String> hosts = (ArrayList<String>) csr.get("hosts");
-            server_list.add(new ServerCA(admin_name, admin_pwd, inter_port, hosts));
-            
+            csr.remove("cn");
             //Writing
             DumperOptions options = new DumperOptions();
             options.setIndent(2);
@@ -1184,7 +1331,7 @@ public class Blockchain {
                                     + "export CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/mspAdmin && "
                                     + "export CORE_PEER_TLS_ENABLED=true && "
                                     + "export CORE_PEER_ADDRESS="+peers_names.get(i)+":"+(7051+((get_num_org()+get_num_other_peers(organization_name)-1)*1000)+(i*1000))+" &&"
-                                    + "export CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/msp/cacerts/127-0-0-1-7054.pem && "
+                                    + "export CORE_PEER_TLS_ROOTCERT_FILE="+(intermediate ?"/etc/hyperledger/fabric/tls/ca-chain.pem": "/etc/hyperledger/fabric/msp/cacerts/127-0-0-1-7054.pem")+" && "
                                     + "export CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/msp/signcerts/cert.pem && "
                                     + "export CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/msp/keystore/" + executeWSLCommandToString("ls "+mainDirectory+"/organizations/peerOrganizations/"+organization_name+"/peers/"+peers_names.get(i)+"/msp/keystore/ | grep _sk").trim() + " && "
                                     + "peer channel join -b /etc/hyperledger/fabric/" + channel_name + "_block.pb'";
@@ -1211,7 +1358,7 @@ public class Blockchain {
                                     + "export CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/mspAdmin && "
                                     + "export CORE_PEER_TLS_ENABLED=true && "
                                     + "export CORE_PEER_ADDRESS="+peers_names.get(0)+":"+(7051+((get_num_org()+get_num_other_peers(organization_name)-1)*1000))+" &&"
-                                    + "export CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/msp/cacerts/127-0-0-1-7054.pem && "
+                                    + "export CORE_PEER_TLS_ROOTCERT_FILE="+(intermediate ?"/etc/hyperledger/fabric/tls/ca-chain.pem": "/etc/hyperledger/fabric/msp/cacerts/127-0-0-1-7054.pem")+" && "
                                     + "export CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/msp/signcerts/cert.pem && "
                                     + "export CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/msp/keystore/" + executeWSLCommandToString("ls "+mainDirectory+"/organizations/peerOrganizations/"+organization_name+"/peers/"+peers_names.get(0)+"/msp/keystore/ | grep _sk").trim() + " && "
                                     + "peer channel join -b /etc/hyperledger/fabric/" + channel_name + "_block.pb'";
@@ -1710,6 +1857,9 @@ public class Blockchain {
         FileWriter fw = new FileWriter(channels, true);
         fw.write(mainDirectory+"/"+channel_name+"\n");
         fw.flush();
+        
+        //copia della cartella intermediateca nel consenter org MSP
+        
         //updateConfigtx_yaml();
         executeWSLCommand("cd "+mainDirectory+"/bin && "+
         "./configtxgen -configPath $(pwd)/"+mainDirectory+"/bin  -profile SampleAppChannelEtcdRaft -channelID "+channel_name+" -outputCreateChannelTx ./"+channel_name+".tx");
@@ -1719,13 +1869,13 @@ public class Blockchain {
             + "export CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/mspAdmin && "
             + "export CORE_PEER_TLS_ENABLED=true && "
             + "export CORE_PEER_ADDRESS="+peer_name+":"+(7051+((get_num_org()+get_num_other_peers(organization_name)-1)*1000))+" &&"
-            + "export CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/tls/tls-ca-cert.pem && "
+            + "export CORE_PEER_TLS_ROOTCERT_FILE="+(intermediate?"/etc/hyperledger/fabric/tls/ca-chain.pem":"/etc/hyperledger/fabric/tls/tls-ca-cert.pem")+" && "
             + "export CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/tls/signcerts/cert.pem && "
             + "export CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/tls/keystore/" + executeWSLCommandToString("ls "+mainDirectory+"/organizations/peerOrganizations/"+organization_name+"/peers/"+peer_name+"/tls/keystore/ | grep _sk").trim() + " && "
             + "peer channel create -c " + channel_name 
             + " -f /etc/hyperledger/fabric/" + channel_name 
             + ".tx -o " + orderer_name + ":" + orderer_port + " "
-            + "--tls --cafile /etc/hyperledger/fabric/tls/tls-ca-cert.pem "
+            + "--tls --cafile "+(intermediate?"/etc/hyperledger/fabric/tls/ca-chain.pem":"/etc/hyperledger/fabric/tls/tls-ca-cert.pem")+" "
             + "--outputBlock /etc/hyperledger/fabric/" + channel_name + "_block.pb'";
         executeWSLCommand(dockerCmd);
         executeWSLCommand("docker cp "+peer_name+":/etc/hyperledger/fabric/"+channel_name+"_block.pb "+mainDirectory+"/bin/");
@@ -1749,12 +1899,12 @@ public class Blockchain {
         executeWSLCommand("export CORE_PEER_LOCALMSPID=Org1MSP && "
                 + "export CORE_PEER_MSPCONFIGPATH=$PWD/"+mainDirectory+"/organizations/peerOrganizations/"+organization_name+"/users/Admin@"+organization_name+"/msp && "
                 + "export CORE_PEER_ADDRESS=localhost:"+(7051+((get_num_org()+get_num_other_peers(organization_name)-1)*1000))+" && "
-                + "export CORE_PEER_TLS_ROOTCERT_FILE=$PWD/"+mainDirectory+"/organizations/peerOrganizations/"+organization_name+"/peers/"+peer_name+"/tls/tlscacerts/tls-127-0-0-1-7054.pem && "
+                + "export CORE_PEER_TLS_ROOTCERT_FILE=$PWD/"+mainDirectory+"/organizations/peerOrganizations/"+organization_name+"/peers/"+peer_name+"/tls/tlscacerts/tls-127-0-0-1-"+(intermediate?"7056":"7054")+".pem && "
                 + "export FABRIC_CFG_PATH=peers_bin/"+peer_name+"/config && "
                 + "cd "+mainDirectory+" && "
                 + "./peer channel fetch config config_block.pb -o " + orderer_name + ":" + orderer_port + " "
                 + "-c "+channel_name+" "
-                + "--tls --cafile $PWD/"+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/" + orderer_name + "/tls/tlscacerts/tls-127-0-0-1-7054.pem ");
+                + "--tls --cafile $PWD/"+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/" + orderer_name + "/tls/tlscacerts/tls-127-0-0-1-"+(intermediate?"7056":"7054")+".pem ");
         
         executeWSLCommand("cd "+mainDirectory+" &&"
                 + "./configtxlator proto_decode --input config_block.pb --type common.Block --output config_block.json && "
@@ -1999,7 +2149,7 @@ public class Blockchain {
             "/peers/" + peer_name + "/tls";
 
         Map<String, Object> clientRootCAs = new LinkedHashMap<>();
-        clientRootCAs.put("files", List.of("/etc/hyperledger/fabric/tls/tlscacerts/tls-127-0-0-1-7054.pem"));
+        clientRootCAs.put("files", List.of("/etc/hyperledger/fabric/tls/tlscacerts/tls-127-0-0-1-"+(intermediate?"7056":"7054")+".pem"));
         tls.put("clientRootCAs", clientRootCAs);
         // File del certificato TLS
         Map<String, Object> cert = new LinkedHashMap<>();
@@ -2018,10 +2168,10 @@ public class Blockchain {
         tls.put("clientKey", clientKey);
         // Root cert (per connessioni in uscita)
         Map<String, Object> rootcert = new LinkedHashMap<>();
-        rootcert.put("file", "/etc/hyperledger/fabric/tls/tlscacerts/tls-127-0-0-1-7054.pem");
+        rootcert.put("file", "/etc/hyperledger/fabric/tls/tlscacerts/tls-127-0-0-1-"+(intermediate?"7056":"7054")+".pem");
         tls.put("rootcert", rootcert);
         Map<String, Object> clientRootcert = new LinkedHashMap<>();
-        clientRootcert.put("file", "/etc/hyperledger/fabric/tls/tlscacerts/tls-127-0-0-1-7054.pem");
+        clientRootcert.put("file", "/etc/hyperledger/fabric/tls/tlscacerts/tls-127-0-0-1-"+(intermediate?"7056":"7054")+".pem");
         tls.put("clientRootcert", clientRootcert);
 
         // clientRootCAs.files (solo se mutual TLS abilitato)
@@ -2241,13 +2391,13 @@ public class Blockchain {
         general_tls.put("PrivateKey", "/var/hyperledger/orderer/tls/keystore/"+executeWSLCommandToString("ls "+mainDirectory+"/organizations/ordererOrganizations/"+ org_name + "/orderers/" + orderer_name+"/tls/keystore/ | grep '_sk'").trim());
 
         general_tls.put("Certificate", "/var/hyperledger/orderer/tls/signcerts/cert.pem"); 
-        general_tls.put("RootCAs", "/var/hyperledger/orderer/tls/tlscacerts/tls-127-0-0-1-7054.pem");
+        general_tls.put("RootCAs", "/var/hyperledger/orderer/tls/tlscacerts/tls-127-0-0-1-"+(intermediate?"7056":"7054")+".pem");
         if(org_name.equals("Consenters")){
             general_tls.put("ClientAuthRequired", false);
             List<String> clientRootCAs = new ArrayList<>();
             //Copiamo il certificato della root nel percorso dell'orderer
             executeWSLCommand("cp "+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "+mainDirectory+"/organizations/ordererOrganizations/"+org_name+"/orderers/"+orderer_name+"/tls/");
-            clientRootCAs.add("/var/hyperledger/orderer/tls/tlscacerts/tls-127-0-0-1-7054.pem");
+            clientRootCAs.add("/var/hyperledger/orderer/tls/tlscacerts/tls-127-0-0-1-"+(intermediate?"7056":"7054")+".pem");
 
             general_tls.put("ClientRootCAs", clientRootCAs);
         }else{
@@ -2257,7 +2407,7 @@ public class Blockchain {
                 List<String> clientRootCAs = new ArrayList<>();
                 //Copiamo il certificato della root nel percorso dell'orderer
                 executeWSLCommand("cp "+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "+mainDirectory+"/organizations/ordererOrganizations/"+org_name+"/orderers/"+orderer_name+"/tls/");
-                clientRootCAs.add("/var/hyperledger/orderer/tls/tlscacerts/tls-127-0-0-1-7054.pem");
+                clientRootCAs.add("/var/hyperledger/orderer/tls/tlscacerts/tls-127-0-0-1-"+(intermediate?"7056":"7054")+".pem");
 
                 general_tls.put("ClientRootCAs", clientRootCAs);
             }
@@ -2371,7 +2521,7 @@ public class Blockchain {
                     List<String> clientRootCAs = new ArrayList<>();
 
 
-                    clientRootCAs.add("/var/hyperledger/orderer/tls/tlscacerts/tls-127-0-0-1-7054.pem");
+                    clientRootCAs.add("/var/hyperledger/orderer/tls/tlscacerts/tls-127-0-0-1-"+(intermediate?"7056":"7054")+".pem");
 
                     operations.put("ClientRootCAs", clientRootCAs);
                 }
@@ -2400,8 +2550,8 @@ public class Blockchain {
         admin_TLS.put("ClientAuthRequired", false);
         List<String> clientRootCAs = new ArrayList<>();
 
-        
-        clientRootCAs.add("/var/hyperledger/orderer/tls/tlscacerts/tls-127-0-0-1-7054.pem");
+
+        clientRootCAs.add("/var/hyperledger/orderer/tls/tlscacerts/tls-127-0-0-1-"+(intermediate?"7056":"7054")+".pem");
 
         admin_TLS.put("ClientRootCAs", clientRootCAs);
         //CHANNEL PARTECIPATION
@@ -2471,7 +2621,28 @@ public class Blockchain {
      * @param path percorso dove scrivere il file
      */
     private static void createConfig_yaml(String path, String org_name){
-        executeWSLCommand("cd "+mainDirectory+" &&"
+        if(intermediate){
+            executeWSLCommand("cd "+mainDirectory+" &&"
+                + "cat > $(pwd)/"+mainDirectory+"/"+path+"/config.yaml << 'EOF'\n" +
+                "NodeOUs:\n" +
+                "  Enable: true\n" +
+                "  ClientOUIdentifier:\n" +
+                "    Certificate: intermediatecerts/ca-cert.pem\n" +
+                "    OrganizationalUnitIdentifier: client\n" +
+                "  PeerOUIdentifier:\n" +
+                "    Certificate: intermediatecerts/ca-cert.pem\n" +
+                "    OrganizationalUnitIdentifier: peer\n" +
+                "  AdminOUIdentifier:\n" +
+                "    Certificate: intermediatecerts/ca-cert.pem\n" +
+                "    OrganizationalUnitIdentifier: admin\n" +
+                "  OrdererOUIdentifier:\n" +
+                "    Certificate: intermediatecerts/ca-cert.pem\n" +
+                "    OrganizationalUnitIdentifier: orderer\n"+
+                "Name: "+org_name+"\n"+
+                "ID: "+org_name+"\n"+
+                "EOF");
+        }else{
+            executeWSLCommand("cd "+mainDirectory+" &&"
                 + "cat > $(pwd)/"+mainDirectory+"/"+path+"/config.yaml << 'EOF'\n" +
                 "NodeOUs:\n" +
                 "  Enable: true\n" +
@@ -2490,6 +2661,8 @@ public class Blockchain {
                 "Name: "+org_name+"\n"+
                 "ID: "+org_name+"\n"+
                 "EOF");
+        }
+        
     }
     
     /**
@@ -2499,55 +2672,75 @@ public class Blockchain {
      * @throws IOException in caso di errori I/O
      */
     private static void organizationAdminRegistrationEnroll(String org_name, boolean peer_org) throws IOException{
-        //System.out.println("---------- ORGANIZATION ADMIN REGISTRATION ----------");
-        //Scanner in= new Scanner(System.in);
-        //System.out.print("Name: ");
         String name="Admin@"+org_name;
-        //System.out.print("Password: ");
         String psw= "Admin@"+org_name+"Psw";
         
         String org_directory= peer_org? "peerOrganizations":"ordererOrganizations";
-        executeWSLCommand("cd " + mainDirectory + "/fabric-ca-client &&"
+
+        if(intermediate){
+            executeWSLCommand("cd " + mainDirectory + "/fabric-ca-client && "
+                +"export FABRIC_CA_CLIENT_TLS_SKIPHOSTVERIFY=true && "
+                + "./fabric-ca-client register -d "
+                + "--id.name " + name + " "
+                + "--id.secret " + psw + " "
+                + "-u https://127.0.0.1:7056 "
+                + "--tls.certfiles $(pwd)/" + mainDirectory + "/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "
+                + "--mspdir $(pwd)/" + mainDirectory + "/fabric-ca-client/tls-ca/icaadmin/msp " 
+                + "--id.type admin");
+
+            executeWSLCommand("cd " + mainDirectory + "/fabric-ca-client && "
+                + "./fabric-ca-client enroll "
+                + "-u https://" + name + ":" + psw + "@127.0.0.1:7056 "
+                + "--mspdir $(pwd)/" + mainDirectory + "/organizations/" + org_directory + "/" + org_name + "/users/" + name + "/msp "
+                + "--csr.hosts 'host1' "
+                + "--tls.certfiles $(pwd)/" + mainDirectory + "/fabric-ca-client/tls-root-cert/tls-ca-cert.pem");
+
+            executeWSLCommand("cp "+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/cacerts &&"
+                            + "cp "+mainDirectory+"/fabric-ca-server-org1/tls/cert.pem "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/tlscacerts");
+            
+            executeWSLCommand("mkdir -p "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/intermediatecerts");
+            executeWSLCommand("cp -r "+mainDirectory+"/fabric-ca-server-int-ca/ca-cert.pem "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/intermediatecerts/");
+                        
+            executeWSLCommand("mkdir -p "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/admincerts && "
+                    + "cp  "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/signcerts/* "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/admincerts/");
+            //executeWSLCommand("cp  "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/signcerts/* "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/signcerts/");
+            //executeWSLCommand("cp  "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/cacerts/* "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/cacerts/");
+            //executeWSLCommand("cp  "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/keystore/* "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/keystore/");
+            //TLS
+            executeWSLCommand("cd "+mainDirectory+"/fabric-ca-client &&"+
+                    "./fabric-ca-client enroll "
+                    + "-u https://"+name+":"+psw+"@127.0.0.1:7056 "
+                    + "--enrollment.profile tls "
+                    + "--mspdir $(pwd)/"+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/tls "
+                    + "--csr.hosts 'admin'  "
+                    + "--tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem"
+            );
+        }else{
+            executeWSLCommand("cd " + mainDirectory + "/fabric-ca-client &&"
                 + "./fabric-ca-client register -d --id.name " + name + " --id.secret " + psw + " "
-                + "-u https://127.0.0.1:7054 "
+                + "-u https://localhost:7054 "
                 + "--tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "
                 + "--mspdir $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-ca/rcaadmin/msp "
                 + "--id.type admin ");
-        /*String pwd=executeWSLCommandToString("echo $(pwd)");
-        System.out.println(pwd);
-        executeWSLCommand(
-            "bash -ic \"./"+mainDirectory+"/fabric-ca-client/fabric-ca-client enroll -u https://" + name + ":" + psw + "@localhost:7055 " +
-            "--mspdir " + pwd + "/"+mainDirectory+"/organizations/" + org_directory + "/" + org_name + "/users/Admin@" + org_name + "/msp " +
-            "--csr.cn " + name + " " +
-            "--csr.names 'C=US,ST=North Carolina,O=org1,OU=client' " +
-            "--tls.certfiles " + pwd + "/"+mainDirectory+"/fabric-ca-server-tls/ca-cert.pem\""
-        );*/
-        executeWSLCommand("cd "+mainDirectory+"/fabric-ca-client &&"
-                + "./fabric-ca-client enroll -u https://"+name+":"+psw+"@127.0.0.1:7054 --mspdir $(pwd)/"+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp --csr.hosts 'host1' --csr.names 'C=US,ST=North Carolina,O="+org_name+",OU=admin' --csr.cn " + name + " --tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem");
-        
-        executeWSLCommand("mkdir "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp &&"
-                + "mkdir "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/cacerts &&"
-                + "cp "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/127-0-0-1-7054.pem "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/cacerts &&"
-                        + "mkdir "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/tlscacerts &&"
-                        + "cp "+mainDirectory+"/fabric-ca-server-org1/tls/cert.pem "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/tlscacerts");
-        
-                    
-        executeWSLCommand("mkdir -p "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/admincerts && "
-                + "cp  "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/signcerts/* "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/admincerts/");
-        //executeWSLCommand("mkdir -p "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/admincerts");
-        //executeWSLCommand("cp  "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/signcerts/* "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/admincerts/");
+            executeWSLCommand("cd "+mainDirectory+"/fabric-ca-client &&"
+                    + "./fabric-ca-client enroll -u https://"+name+":"+psw+"@localhost:7054 --mspdir $(pwd)/"+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp --csr.hosts 'host1' --csr.names 'C=US,ST=North Carolina,O="+org_name+",OU=admin' --csr.cn " + name + " --tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem");
+            
+            executeWSLCommand("cp "+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/cacerts &&"
+                       + "cp "+mainDirectory+"/fabric-ca-server-org1/tls/cert.pem "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/tlscacerts");
+            
+                        
+            executeWSLCommand("mkdir -p "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/admincerts && "
+                    + "cp  "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/signcerts/* "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/admincerts/");
+            executeWSLCommand("cp  "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/signcerts/* "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/signcerts/");
+            executeWSLCommand("cp  "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/cacerts/* "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/cacerts/");
+            executeWSLCommand("cp  "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/keystore/* "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/keystore/");
+            //TLS
+            executeWSLCommand("cd "+mainDirectory+"/fabric-ca-client &&"+
+                    "./fabric-ca-client enroll -u https://"+name+":"+psw+"@127.0.0.1:7054 --enrollment.profile tls --mspdir $(pwd)/"+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/tls --csr.hosts 'admin'  --tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem"
+            );
 
-        //executeWSLCommand("mkdir -p "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/admincerts");
-        //executeWSLCommand("cp  "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/signcerts/* "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/admincerts/");
-        //executeWSLCommand("mkdir -p "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/signcerts");
-        executeWSLCommand("cp  "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/signcerts/* "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/signcerts/");
-        //executeWSLCommand("mkdir -p "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/cacerts");
-        executeWSLCommand("cp  "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/cacerts/* "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/cacerts/");
-        executeWSLCommand("cp  "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/keystore/* "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/keystore/");
-        //TLS
-        executeWSLCommand("cd "+mainDirectory+"/fabric-ca-client &&"+
-                "./fabric-ca-client enroll -u https://"+name+":"+psw+"@127.0.0.1:7054 --enrollment.profile tls --mspdir $(pwd)/"+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/tls --csr.hosts 'admin'  --tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem"
-        );
+            
+        }
 
         //Inserimento dell'admin in fabric-ca-server-config.yaml
         File server_config=new File(""+ mainDirectory +"/fabric-ca-server-tls/fabric-ca-server-config.yaml");
@@ -2559,7 +2752,7 @@ public class Blockchain {
         admin_identity.put("pass", psw);
         admin_identity.put("type", "admin");
 
-         DumperOptions options = new DumperOptions();
+        DumperOptions options = new DumperOptions();
         options.setIndent(2);
         options.setPrettyFlow(true);
         options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
@@ -2571,6 +2764,7 @@ public class Blockchain {
 
         //riavvio del container di fabric-ca-server per applicare le modifiche
         executeWSLCommand("docker restart "+tls_ca_name);
+        
     }
     
     
@@ -2587,70 +2781,81 @@ public class Blockchain {
                 ? "peerOrganizations/" + org_name + "/peers/" + node_name + "/"
                 : "ordererOrganizations/" + org_name + "/orderers/" + node_name + "/";
         executeWSLCommand("mkdir "+mainDirectory+"/fabric-ca-client/org1-ca/"+node_name);
-        // Registrazione identità presso 7054
-         executeWSLCommand("cd " + mainDirectory + "/fabric-ca-client &&"
-                + "./fabric-ca-client register -d --id.name " + node_name + " --id.secret " + node_name + "_PSW "
-                + "-u https://127.0.0.1:7054 "
-                + "--tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "
-                + "--mspdir $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-ca/rcaadmin/msp "
+        if(intermediate){
+            executeWSLCommand("cd " + mainDirectory + "/fabric-ca-client && "
+                +"export FABRIC_CA_CLIENT_TLS_SKIPHOSTVERIFY=true && "
+                + "./fabric-ca-client register -d "
+                + "--id.name " + node_name + " "
+                + "--id.secret " + node_name + "_PSW " 
+                + "-u https://"+node_name+":" + node_name + "_PSW@127.0.0.1:7056 "
+                + "--tls.certfiles $(pwd)/" + mainDirectory + "/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "
+                + "--mspdir $(pwd)/" + mainDirectory + "/fabric-ca-client/tls-ca/icaadmin/msp " 
                 + "--id.type "+(peer_org? "peer ":"orderer "));
-        /*executeWSLCommand("cd " + mainDirectory + "/fabric-ca-client &&"
-                + "export FABRIC_CA_CLIENT_HOME=$(pwd)/org1-ca/"+node_name+" &&"
-                + "./fabric-ca-client register -d --id.name " + node_name + " --id.secret " + node_name + "_PSW "
-                + "-u https://localhost:7055 "
-                + "--tls.certfiles $(pwd)/" + mainDirectory + "/fabric-ca-server-org1/tls/cert.pem "
-                + "--mspdir $(pwd)/" + mainDirectory + "/fabric-ca-client/org1-ca/rcaadmin/msp "
-                + "--id.type "+(peer_org? "peer":"orderer") );*/
 
-        // Enrollment per MSP (identità)
-        executeWSLCommand("cd " + mainDirectory + "/fabric-ca-client &&"
-                + "./fabric-ca-client enroll -u https://" + node_name + ":" + node_name + "_PSW@127.0.0.1:7054 "
+            // Enrollment per MSP (identità)
+
+            executeWSLCommand("cd " + mainDirectory + "/fabric-ca-client && "
+                + "./fabric-ca-client enroll "
+                + "-u https://" + node_name + ":" + node_name + "_PSW@127.0.0.1:7056 "
                 + "--mspdir $(pwd)/" + mainDirectory + "/organizations/" + org_directory + "msp "
                 + "--csr.hosts " + node_name + " "
-                + "--tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem");
+                + "--tls.certfiles $(pwd)/" + mainDirectory + "/fabric-ca-server-int-ca/ca-chain.pem");
 
-        // Aggiungo admincerts (legacy ma ancora richiesto in alcuni setup)
-        executeWSLCommand("mkdir -p " + mainDirectory + "/organizations/" + org_directory + "msp/admincerts &&"
-                + "cp " + mainDirectory + "/organizations/" + (peer_org ? "peerOrganizations/" : "ordererOrganizations/")
-                + org_name +"/orderers/"+node_name+ "/msp/signcerts/cert.pem "
-                + mainDirectory + "/organizations/" + org_directory + "msp/admincerts");
-        
-        
-       
+            // Aggiungo admincerts (legacy ma ancora richiesto in alcuni setup)
+            executeWSLCommand("mkdir -p " + mainDirectory + "/organizations/" + org_directory + "msp/admincerts &&"
+                    + "cp " + mainDirectory + "/organizations/" + (peer_org ? "peerOrganizations/" : "ordererOrganizations/")
+                    + org_name +"/orderers/"+node_name+ "/msp/signcerts/cert.pem "
+                    + mainDirectory + "/organizations/" + org_directory + "msp/admincerts");
+            
+            //sistemazione cartelle intermediatecerts e cacerts
+            executeWSLCommand("mkdir -p "+mainDirectory+"/organizations/"+org_directory+"msp/intermediatecerts && "
+                    + "cp -r "+mainDirectory+"/fabric-ca-server-int-ca/ca-cert.pem "+mainDirectory+"/organizations/"+org_directory+"msp/intermediatecerts/ && "
+                    + "rm "+mainDirectory+"/organizations/"+org_directory+"msp/cacerts/* && "
+                    + "cp -r "+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "+mainDirectory+"/organizations/"+org_directory+"msp/cacerts/");
+            //TLS
+            executeWSLCommand("cd "+mainDirectory+"/fabric-ca-client &&"+
+                    "./fabric-ca-client enroll "
+                    + "-u https://"+node_name+":"+node_name+"_PSW@127.0.0.1:7056 "
+                    + "--enrollment.profile tls "
+                    + "--mspdir $(pwd)/" + mainDirectory + "/organizations/" + org_directory + "tls "
+                    + "--csr.hosts " + node_name + " "
+                    + "--tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-server-int-ca/ca-chain.pem"
+            );
+        }else{
+            // Registrazione identità presso 7054
+            executeWSLCommand("cd " + mainDirectory + "/fabric-ca-client &&"
+                    + "./fabric-ca-client register -d --id.name " + node_name + " --id.secret " + node_name + "_PSW "
+                    + "-u https://127.0.0.1:7054 "
+                    + "--tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "
+                    + "--mspdir $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-ca/rcaadmin/msp "
+                    + "--id.type "+(peer_org? "peer ":"orderer "));
 
-        
-        // Enrollment TLS 
-        executeWSLCommand("cd " + mainDirectory + "/fabric-ca-client &&"
-                + "./fabric-ca-client enroll -u https://" + node_name + ":" + node_name + "_PSW@127.0.0.1:7054 "
-                + "--enrollment.profile tls "
-                + "--csr.hosts " + node_name + " "
-                + "--mspdir $(pwd)/" + mainDirectory + "/organizations/" + org_directory + "tls "
-                + "--tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem");
+            // Enrollment per MSP (identità)
+            executeWSLCommand("cd " + mainDirectory + "/fabric-ca-client &&"
+                    + "./fabric-ca-client enroll -u https://" + node_name + ":" + node_name + "_PSW@127.0.0.1:7054 "
+                    + "--mspdir $(pwd)/" + mainDirectory + "/organizations/" + org_directory + "msp "
+                    + "--csr.hosts " + node_name + " "
+                    + "--tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem");
 
-        // Rinominare i file TLS come richiesto da Fabric
-        /*executeWSLCommand("mv " + mainDirectory + "/organizations/" + org_directory + "tls/signcerts/cert.pem "
-                + mainDirectory + "/organizations/" + org_directory + "tls/signcerts/cert.pem");
-        executeWSLCommand("mv " + mainDirectory + "/organizations/" + org_directory + "tls/keystore/* "
-                + mainDirectory + "/organizations/" + org_directory + "tls/keystore/"+executeWSLCommandToString("ls "+mainDirectory+"/organizations/ordererOrganizations/"+ org_name + "/orderers/" + orderer_name+"/tls/keystore/ | grep '_sk'").trim());
-        executeWSLCommand("mv " + mainDirectory + "/organizations/" + org_directory + "tls/tlscacerts/* "
-                + mainDirectory + "/organizations/" + org_directory + "tls/tlscacerts/tls-127-0-0-1-7054.pem");*/
+            // Aggiungo admincerts (legacy ma ancora richiesto in alcuni setup)
+            executeWSLCommand("mkdir -p " + mainDirectory + "/organizations/" + org_directory + "msp/admincerts &&"
+                    + "cp " + mainDirectory + "/organizations/" + (peer_org ? "peerOrganizations/" : "ordererOrganizations/")
+                    + org_name +"/orderers/"+node_name+ "/msp/signcerts/cert.pem "
+                    + mainDirectory + "/organizations/" + org_directory + "msp/admincerts");
+            
+            
         
-        //certificati per clientTLS
-        
-        executeWSLCommand("mkdir "+mainDirectory+"/organizations/"+org_directory+"tlsclient");
-        executeWSLCommand("cd " + mainDirectory + "/fabric-ca-client &&"
-                + "./fabric-ca-client enroll -u https://" + node_name + ":" + node_name + "_PSW@127.0.0.1:7054 "
-                + "--enrollment.profile tls "
-                + "--csr.hosts " + node_name + " "
-                + "--mspdir $(pwd)/" + mainDirectory + "/organizations/" + org_directory + "tlsclient "
-                + "--tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem");
-        /*executeWSLCommand("mv " + mainDirectory + "/organizations/" + org_directory + "tlsclient/signcerts/cert.pem "
-                + mainDirectory + "/organizations/" + org_directory + "tlsclient/signcerts/cert.pem");
-        executeWSLCommand("mv " + mainDirectory + "/organizations/" + org_directory + "tlsclient/keystore/* "
-                + mainDirectory + "/organizations/" + org_directory + "tlsclient/keystore/"+executeWSLCommandToString("ls "+mainDirectory+"/organizations/ordererOrganizations/"+ org_name + "/orderers/" + orderer_name+"/tls/keystore/ | grep '_sk'").trim());
-        executeWSLCommand("mv " + mainDirectory + "/organizations/" + org_directory + "tlsclient/tlscacerts/* "
-                + mainDirectory + "/organizations/" + org_directory + "tlsclient/tlscacerts/tls-127-0-0-1-7054.pem");*/
-        
+
+            
+            // Enrollment TLS 
+            executeWSLCommand("cd " + mainDirectory + "/fabric-ca-client &&"
+                    + "./fabric-ca-client enroll -u https://" + node_name + ":" + node_name + "_PSW@127.0.0.1:7054 "
+                    + "--enrollment.profile tls "
+                    + "--csr.hosts " + node_name + " "
+                    + "--mspdir $(pwd)/" + mainDirectory + "/organizations/" + org_directory + "tls "
+                    + "--tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem");
+            
+        }
         
     }
 
@@ -2840,7 +3045,7 @@ public class Blockchain {
         env.add("CORE_PEER_GOSSIP_ORGLEADER=false");
         env.add("CORE_PEER_TLS_CLIENTKEY_FILE=/etc/hyperledger/fabric/tls/keystore/"+executeWSLCommandToString("ls "+mainDirectory+"/organizations/peerOrganizations/"+ org_name + "/peers/" + peerName+"/tls/keystore/ | grep '_sk'").trim());
         env.add("CORE_PEER_TLS_CLIENTCERT_FILE=/etc/hyperledger/fabric/tls/signcerts/cert.pem");
-        env.add("CORE_PEER_TLS_CLIENTROOTCAS_FILES=/etc/hyperledger/fabric/tls/tlscacerts/tls-127-0-0-1-7054.pem");
+        env.add("CORE_PEER_TLS_CLIENTROOTCAS_FILES=/etc/hyperledger/fabric/tls/tlscacerts/tls-127-0-0-1-"+(intermediate?"7056":"7054")+".pem");
 
         env.add("CORE_PEER_GOSSIP_ALIVEEXPIRATIONTIMEOUT=300s");
 
@@ -2855,6 +3060,9 @@ public class Blockchain {
         volumes.add(tlsPath + ":/etc/hyperledger/fabric/tls");
         volumes.add("/var/run/docker.sock:/var/run/docker.sock");
         volumes.add("/mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem:/etc/hyperledger/fabric/tls/tls-ca-cert.pem");
+        if(intermediate){
+            volumes.add("/mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/"+mainDirectory+"/fabric-ca-server-int-ca/ca-chain.pem:/etc/hyperledger/fabric/tls/ca-chain.pem");
+        }
         peerConfig.put("volumes", volumes);
         
          // Ports
@@ -3032,7 +3240,7 @@ public class Blockchain {
         //create_organization_MSP("org1", true);
         // Aggiungo admincerts (legacy ma ancora richiesto in alcuni setup)
         executeWSLCommand("mkdir -p " + mainDirectory + "/organizations/peerOrganizations/"+org_name+"/msp/admincerts &&"
-                + "cp " + mainDirectory + "/organizations/peerOrganizations/"+org_name+"/msp/signcerts/cert.pem " + mainDirectory + "/organizations/peerOrganizations/"+org_name+"/msp/admincerts");
+                + "cp " + mainDirectory + "/organizations/peerOrganizations/"+org_name+"/users/Admin@"+org_name+"/msp/signcerts/cert.pem " + mainDirectory + "/organizations/peerOrganizations/"+org_name+"/msp/admincerts");
         
         create_msp_tls_certificate("Consenters",orderer_name, false);
         //create_msp_tls_certificate("Consenters","orderer2.example.com", false);
@@ -3281,6 +3489,10 @@ public class Blockchain {
         fixVersionConfigtx();
         
         //------------------ORDERER------------------
+        executeWSLCommand("mkdir "+mainDirectory+"/organizations/ordererOrganizations/Consenters/msp");
+        executeWSLCommand("mkdir "+mainDirectory+"/organizations/ordererOrganizations/Consenters/msp/cacerts");
+        executeWSLCommand("mkdir "+mainDirectory+"/organizations/ordererOrganizations/Consenters/msp/tlscacerts");
+
         organizationAdminRegistrationEnroll("Consenters", false);
         createConfig_yaml("organizations/ordererOrganizations/"+"Consenters"+"/msp","Consenters");
         copy_orderer_bin(orderer_name);
@@ -3414,6 +3626,9 @@ public class Blockchain {
      * @throws IOException in caso di errori I/O
      */
     private static void addConsentersDocker() throws IOException{
+        if(intermediate){
+            executeWSLCommand("cp "+mainDirectory+"/fabric-ca-server-int-ca/ca-chain.pem "+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/" + orderer_name + "/tls");
+        }
         String path=executeWSLCommandToString("echo $(pwd)");
         String file_content="  " + orderer_name + ":\n" +
                 "    image: hyperledger/fabric-orderer:2.5\n" +
@@ -3433,9 +3648,9 @@ public class Blockchain {
                 "      - ORDERER_GENERAL_CLUSTER_TLS_CLIENTAUTHREQUIRED=false\n" +
                 "      - ORDERER_GENERAL_CLUSTER_SERVERCERTIFICATE=/var/hyperledger/orderer/tls/signcerts/cert.pem\n" +
                 "      - ORDERER_GENERAL_CLUSTER_SERVERPRIVATEKEY=/var/hyperledger/orderer/tls/keystore/"+executeWSLCommandToString("ls "+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/" + orderer_name + "/tls/keystore/ | grep '_sk'").trim()+"\n" +
-                "      - ORDERER_GENERAL_CLUSTER_CLIENTCERTIFICATE=/var/hyperledger/orderer/tlsclient/signcerts/cert.pem\n" +
-                "      - ORDERER_GENERAL_CLUSTER_CLIENTPRIVATEKEY=/var/hyperledger/orderer/tlsclient/keystore/"+executeWSLCommandToString("ls "+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/" + orderer_name + "/tlsclient/keystore/ | grep '_sk'").trim()+"\n" +
-                "      - ORDERER_GENERAL_CLUSTER_ROOTCAS=/var/hyperledger/orderer/tls/tls-ca-cert.pem\n" +
+                "      - ORDERER_GENERAL_CLUSTER_CLIENTCERTIFICATE=/var/hyperledger/orderer/tls/signcerts/cert.pem\n" +
+                "      - ORDERER_GENERAL_CLUSTER_CLIENTPRIVATEKEY=/var/hyperledger/orderer/tls/keystore/"+executeWSLCommandToString("ls "+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/" + orderer_name + "/tls/keystore/ | grep '_sk'").trim()+"\n" +
+                "      - ORDERER_GENERAL_CLUSTER_ROOTCAS="+(intermediate ? "[/var/hyperledger/orderer/tls/tls-ca-cert.pem, /var/hyperledger/orderer/tls/ca-cert.pem]" : "[/var/hyperledger/orderer/tls/tls-ca-cert.pem]")+"\n" +
                 "      # MSP\n" +
                 "      - ORDERER_GENERAL_LOCALMSPID=Consenters\n" +
                 "      - ORDERER_GENERAL_LOCALMSPDIR=/var/hyperledger/orderer/msp\n" +
@@ -3443,10 +3658,10 @@ public class Blockchain {
                 "      # TLS\n" +
                 "      - ORDERER_GENERAL_TLS_ENABLED=true \n" +
                 "      - ORDERER_GENERAL_TLS_CLIENTAUTHREQUIRED=false\n" +
-                "      - ORDERER_GENERAL_TLS_CLIENTROOTCAS=/var/hyperledger/orderer/tls/tls-ca-cert.pem\n" +
+                "      - ORDERER_GENERAL_TLS_CLIENTROOTCAS="+(intermediate ? "[/var/hyperledger/orderer/tls/tls-ca-cert.pem, /var/hyperledger/orderer/tls/ca-cert.pem]" : "[/var/hyperledger/orderer/tls/tls-ca-cert.pem]")+"\n" +
                 "      - ORDERER_GENERAL_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/keystore/"+executeWSLCommandToString("ls "+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/" + orderer_name + "/tls/keystore/ | grep '_sk'").trim()+"\n" +
                 "      - ORDERER_GENERAL_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/signcerts/cert.pem\n" +
-                "      - ORDERER_GENERAL_TLS_ROOTCAS=/var/hyperledger/orderer/tls/tls-ca-cert.pem\n" +
+                "      - ORDERER_GENERAL_TLS_ROOTCAS="+(intermediate ? "[/var/hyperledger/orderer/tls/tls-ca-cert.pem,/var/hyperledger/orderer/tls/ca-cert.pem]" : "[/var/hyperledger/orderer/tls/tls-ca-cert.pem]")+"\n" +
                 "\n" +
                 "      # Bootstrap\n" +
                 "      #- ORDERER_GENERAL_BOOTSTRAPMETHOD=none\n" +
@@ -3454,12 +3669,12 @@ public class Blockchain {
                 "      # Admin service\n" +
                 "      - ORDERER_ADMIN_LISTENADDRESS=" + orderer_name + ":"+(9442+(get_num_orderers()))+"\n" +
                 "      - ORDERER_ADMIN_TLS_ENABLED=true\n" +
-                "      - ORDERER_ADMIN_TLS_ROOTCAS=/var/hyperledger/orderer/tls/tls-ca-cert.pem\n" +
+                "      - ORDERER_ADMIN_TLS_ROOTCAS="+(intermediate ? "[/var/hyperledger/orderer/tls/tls-ca-cert.pem, /var/hyperledger/orderer/tls/ca-cert.pem]" : "[/var/hyperledger/orderer/tls/tls-ca-cert.pem]")+"\n" +
                 "      - ORDERER_ADMIN_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/keystore/"+executeWSLCommandToString("ls "+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/" + orderer_name + "/tls/keystore/ | grep '_sk'").trim()+"\n" +
                 "      - ORDERER_ADMIN_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/signcerts/cert.pem\n" +
                 "      - ORDERER_ADMIN_TLS_CLIENTAUTHREQUIRED=true\n" +
-                "      - ORDERER_ADMIN_TLS_CLIENTROOTCAS=/var/hyperledger/orderer/tls/tls-ca-cert.pem\n" +
-                "\n" +
+                "      - ORDERER_ADMIN_TLS_CLIENTROOTCAS="+(intermediate ? "[/var/hyperledger/orderer/tls/tls-ca-cert.pem, /var/hyperledger/orderer/tls/ca-cert.pem]" : "[/var/hyperledger/orderer/tls/tls-ca-cert.pem]")+"\n" +
+                    "\n" +
                 "      # Channel participation\n" +
                 "      - ORDERER_CHANNELPARTICIPATION_ENABLED=true\n" +
                 "\n" +
@@ -3478,9 +3693,9 @@ public class Blockchain {
                 "      - "+path+"/"+mainDirectory+"/organizations/ordererOrganizations/Consenters/msp:/etc/hyperledger/fabric/msp\n" +
                 "      - "+path+"/"+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/" + orderer_name + "/msp:/var/hyperledger/orderer/msp\n" +
                 "      - "+path+"/"+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/" + orderer_name + "/tls:/var/hyperledger/orderer/tls\n" +
-                "      - "+path+"/"+mainDirectory+"/organizations/ordererOrganizations/Consenters/orderers/" + orderer_name + "/tlsclient:/var/hyperledger/orderer/tlsclient\n" +
                 "      - "+path+"/"+mainDirectory+"/bin/:/var/hyperledger/orderer/genesis_block\n" +
                 "      - "+path+"/"+mainDirectory+"/orderers_bin/" + orderer_name + "/config:/etc/hyperledger/fabric/config\n"+
+                (intermediate ? "      - "+path+"/"+mainDirectory+"/fabric-ca-server-int-ca/ca-cert.pem:/var/hyperledger/orderer/tls/ca-cert.pem\n" : "") +
                 "    networks:\n" +
                 "      - fabric_network\n" +
                 "\n";
