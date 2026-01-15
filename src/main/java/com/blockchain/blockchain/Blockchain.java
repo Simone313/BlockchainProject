@@ -82,7 +82,7 @@ public class Blockchain {
             String line;
             LinkedList<String> prjs= new LinkedList<String>();
             while((line=reader.readLine())!=null){
-                prjs.add(line);
+                prjs.add(line.split(" ")[0]);
             }
             
             do{
@@ -98,7 +98,7 @@ public class Blockchain {
                         System.out.println(GREEN+" -------- SELECT PROJECT --------");
 
                         for(int i=0;i<prjs.size();i++){
-                            System.out.println((i+1)+") "+prjs.get(i));
+                            System.out.println((i+1)+") "+((prjs.get(i)).split(" ")[0]));
                         }
                         System.out.println((prjs.size()+1)+") Exit");
                         System.out.print("--> ");
@@ -107,7 +107,10 @@ public class Blockchain {
                         if(select==prjs.size()+1){
                             break;
                         }
-                        mainDirectory= prjs.get(select-1);
+                        mainDirectory= prjs.get(select-1).split(" ")[0];
+                        if(prjs.get(select-1).split(" ")[0].equals("intermediate")){
+                            intermediate=true;
+                        }
                         if(!checkContainersRunning()){
                             executeWSLCommand("cd "+ mainDirectory+" && "
                                 + "docker compose start");
@@ -120,15 +123,19 @@ public class Blockchain {
                     }
                     case 2:{
                         System.out.print(GREEN+"Project name: "+RESET);
-                        mainDirectory=in.next();
+                        mainDirectory=in.next().replace(" ", "_");
                         if(prjs.contains(mainDirectory)){
                             System.err.println(GREEN+"Project with this name already exists."+RESET);
                             break;
                         }
-                        prjs.add(mainDirectory);
-                        FileWriter fw = new FileWriter(projects, true);
-                        fw.write(mainDirectory+"\n");
-                        fw.close();
+                        System.out.println(GREEN+"Do you want to deploy an Intermediate CA? y/n"+RESET);
+                        if(in.next().equals("y")){
+                            intermediate=true;
+                        }
+                        prjs.add(mainDirectory+" "+(intermediate ? "intermediate":"root"));
+                        //FileWriter fw = new FileWriter(projects, true);
+                        //fw.write(mainDirectory+" "+(intermediate ? "intermediate":"root")+"\n");
+                        //fw.close();
                         String yourPin="simone03";
                         createDirectory(mainDirectory);
                         setupCA(yourPin);
@@ -156,15 +163,16 @@ public class Blockchain {
                         System.out.println(GREEN+" -------- SELECT PROJECT --------");
 
                         for(int i=0;i<prjs.size();i++){
-                            System.out.println((i+1)+") "+prjs.get(i));
+                            System.out.println((i+1)+") "+prjs.get(i).split(" ")[0]);
                         }
                         System.out.println((prjs.size()+1)+") Exit"+RESET);
 
                         int select= in.nextInt();
+                        in.nextLine();
                         if(select==prjs.size()+1){
                             break;
                         }
-                        mainDirectory= prjs.get(select-1);
+                        mainDirectory= prjs.get(select-1).split(" ")[0];
 
                         //Rimuovo il progetto dal file peerOrgs.txt
                         File peerOrgs= new File("src\\main\\java\\com\\blockchain\\blockchain\\peerOrgs.txt");
@@ -450,12 +458,6 @@ public class Blockchain {
                 +"--tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "
                 +"--csr.hosts 'localhost,tls-ca,127.0.0.1' "
                 +"--mspdir $(pwd)/"+mainDirectory+"/fabric-ca-client/org1-ca/rcaadmin/msp");
-            System.out.println(GREEN+"Do you want to deploy an Intermediate CA? y/n"+RESET);
-            if(in.next().equals("y")){
-                intermediate=true;
-                registerIntermediateCAAdmin(0);
-                
-            }
             
             
             
@@ -463,17 +465,24 @@ public class Blockchain {
 
             
             if(intermediate){
+                registerIntermediateCAAdmin(0);
                 executeWSLCommand("cp "+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "+mainDirectory+"/fabric-ca-server-int-ca/");
                 deployIntermediateCA();
-                new FabricIntermediateServerThread(mainDirectory);
-                waitForContainer(int_ca_name);
-                addIcaadminToDB();
-                
-                
-
                 executeWSLCommand("cat " + mainDirectory + "/fabric-ca-server-int-ca/ca-cert.pem "
                     + mainDirectory + "/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "
                     + "> " + mainDirectory + "/fabric-ca-server-int-ca/ca-chain.pem");
+                new FabricIntermediateServerThread(mainDirectory);
+                waitForContainer(int_ca_name);
+                String enrollCmd =
+                "cd " + mainDirectory + "/fabric-ca-client && " +
+                "./fabric-ca-client enroll " +
+                "-u https://icaadmin:icaadminPsw@127.0.0.1:7056 " +
+                "--tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "+
+                "--csr.hosts localhost,127.0.0.1 "+
+                "--mspdir $(pwd)/"+mainDirectory+"/fabric-ca-client/int-ca/icaadmin/msp";
+                executeWSLCommand(enrollCmd);
+
+                
 
                 // 3. COPIA E RIAVVIA IL SERVER (Oppure avvialo se era fermo)
                 executeWSLCommand("docker cp " + mainDirectory + "/fabric-ca-server-int-ca/ca-chain.pem int-ca:/etc/hyperledger/fabric-ca-server/ca-chain.pem");
@@ -658,6 +667,7 @@ public class Blockchain {
         System.out.println("old_name:"+old_name);
         executeWSLCommand("mv "+old_name+" $(pwd)/"+mainDirectory+"/fabric-ca-server-int-ca/icaadmin/msp/keystore/CA_PRIVATE_KEY");
         
+
 
         /*executeWSLCommand("cd "+mainDirectory+" &&"
                 + "mkdir -p fabric-ca-server-int-ca/msp fabric-ca-server-int-ca/tls &&"
@@ -1017,16 +1027,38 @@ public class Blockchain {
         
         
         executeWSLCommand("cp "+mainDirectory+"/fabric-ca-server-config.yaml "+mainDirectory+"/fabric-ca-server-int-ca/");
-               
+        File server_config=new File(""+ mainDirectory +"/fabric-ca-server-int-ca/fabric-ca-server-config.yaml");
+        Yaml yaml= new Yaml();
+        Map<String, Object> data= yaml.load(new FileReader(server_config));
+        //identiites
+        ArrayList<Map<String, Object>> identities= (ArrayList<Map<String, Object>>)((Map<String, Object>) data.get("registry")).get("identities");
+        Map<String, Object> admin_identity= identities.get(0);
+        admin_identity.put("name", "icaadmin");
+        admin_identity.put("pass", "icaadminPsw");
+        admin_identity.put("type", "admin");
+        //Writing
+        DumperOptions options = new DumperOptions();
+        options.setIndent(2);
+        options.setPrettyFlow(true);
+        options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+        Yaml yamlWriter = new Yaml(options);
+
+        try (FileWriter writer = new FileWriter(server_config)) {
+            yamlWriter.dump(data, writer);
+        }
+        executeWSLCommand("cp "+mainDirectory+"/bin/fabric-ca-server "+ mainDirectory +"/fabric-ca-server-int-ca");
+        executeWSLCommand(
+            "cd "+ mainDirectory +"/fabric-ca-server-int-ca && " +
+            "./fabric-ca-server init " +
+            "-b icaadmin:icaadminPsw"
+        );
 
 
         
-        Scanner in = new Scanner(System.in);
             //CA
             int_ca_name="int-ca";
-            File server_config=new File(""+ mainDirectory +"/fabric-ca-server-int-ca/fabric-ca-server-config.yaml");
-            Yaml yaml= new Yaml();
-            Map<String, Object> data= yaml.load(new FileReader(server_config));
+            yaml= new Yaml();
+            data= yaml.load(new FileReader(server_config));
             data.put("port", 7056);
             Map<String,Object> ca=(Map<String,Object>) data.get("ca");
             ca.put("name", int_ca_name);
@@ -1077,6 +1109,7 @@ public class Blockchain {
             data.put("ports", inter_port);
 
             
+
             Map<String,Object> csr_ca=(Map<String,Object>)((Map<String,Object>)data.get("csr")).get("ca");
             csr_ca.put("pathlength", 0);
             //DB
@@ -1088,17 +1121,19 @@ public class Blockchain {
             ArrayList<String> hosts = (ArrayList<String>) csr.get("hosts");
             csr.remove("cn");
             //Writing
-            DumperOptions options = new DumperOptions();
+            options = new DumperOptions();
             options.setIndent(2);
             options.setPrettyFlow(true);
             options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
-            Yaml yamlWriter = new Yaml(options);
+            yamlWriter = new Yaml(options);
 
             try (FileWriter writer = new FileWriter(server_config)) {
                 yamlWriter.dump(data, writer);
             }
             System.out.println("Config updated");
             String server_name= "fabric-ca-server-int-ca";
+            
+            
             addCAtoDocker(int_ca_name, true, inter_port, server_name, true);
     }
     
@@ -1434,8 +1469,13 @@ public class Blockchain {
                         System.out.println(i+")"+line);
                         i++;
                     }
+                    System.out.println(i+") "+"Exit");
                     System.out.print("--> "+RESET);
                     int org_choice=in.nextInt();
+
+                    if(org_choice==i){
+                        break;
+                    }
                     String organization_name="";
                     LinkedList<String> pOr= new LinkedList<String>();
                     reader= new BufferedReader(new FileReader(peerOrgs));
@@ -1479,8 +1519,12 @@ public class Blockchain {
                     for(int i=0;i<pOr.size();i++){
                         System.out.println((i+1)+") "+pOr.get(i).split("/")[1]);  
                     }
+                    System.out.println(pOr.size()+") Exit");
                     System.out.print("--> "+RESET);
                     int org_choice=in.nextInt();
+                    if(org_choice==pOr.size()){
+                        break;
+                    }
                     String organization_name=pOr.get(org_choice-1);
                     int peer_number=get_num_peers(organization_name.split("/")[1]);
                     organizationMenu(organization_name.split("/")[1],peer_number+1);
@@ -1498,13 +1542,20 @@ public class Blockchain {
                     System.out.print(GREEN+"Select the channel to remove: "+RESET);
                     String line;
                     int i=1;
+                    LinkedList<String> chs= new LinkedList<String>();
                     System.out.println(GREEN);
                     while((line=reader.readLine())!=null){
                         System.out.println(i+")"+line);
+                        chs.add(line);
                         i++;
                     }
+                    System.out.println(i+") Exit");
                     System.out.print("--> "+RESET);
-                    String channel_name=in.next();
+                    int channel=in.nextInt();
+                    if(channel==i){
+                        break;
+                    }
+                    String channel_name=chs.get(channel);
                     executeWSLCommand("cd "+mainDirectory+"/bin &&"
                             + "rm -f "+channel_name+"_block.pb");
                     removeChannelFromFile(channel_name);
@@ -1593,8 +1644,8 @@ public class Blockchain {
                         i++;
                     }
                     System.out.print("--> "+RESET);
-                    String channel_risp=in.next();
-                    String channel_name=chs.get(Integer.parseInt(channel_risp)-1).split("/")[1];
+                    int channel_risp=in.nextInt();
+                    String channel_name=chs.get(channel_risp).split("/")[1];
                     reader.close();
                     executeWSLCommand("cd "+mainDirectory+"/organizations/peerOrganizations/"+organization_name+"/peers &&"
                                 + "mkdir "+peer_name+" &&"
@@ -2685,7 +2736,7 @@ public class Blockchain {
                 + "--id.secret " + psw + " "
                 + "-u https://127.0.0.1:7056 "
                 + "--tls.certfiles $(pwd)/" + mainDirectory + "/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "
-                + "--mspdir $(pwd)/" + mainDirectory + "/fabric-ca-client/tls-ca/icaadmin/msp " 
+                + "--mspdir $(pwd)/"+mainDirectory+"/fabric-ca-client/int-ca/icaadmin/msp " 
                 + "--id.type admin");
 
             executeWSLCommand("cd " + mainDirectory + "/fabric-ca-client && "
@@ -2789,7 +2840,7 @@ public class Blockchain {
                 + "--id.secret " + node_name + "_PSW " 
                 + "-u https://"+node_name+":" + node_name + "_PSW@127.0.0.1:7056 "
                 + "--tls.certfiles $(pwd)/" + mainDirectory + "/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "
-                + "--mspdir $(pwd)/" + mainDirectory + "/fabric-ca-client/tls-ca/icaadmin/msp " 
+                + "--mspdir $(pwd)/"+mainDirectory+"/fabric-ca-client/int-ca/icaadmin/msp "
                 + "--id.type "+(peer_org? "peer ":"orderer "));
 
             // Enrollment per MSP (identità)
