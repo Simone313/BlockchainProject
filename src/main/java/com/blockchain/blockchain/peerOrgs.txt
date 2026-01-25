@@ -1,2 +1,0 @@
-Project/org1
-Project/org2

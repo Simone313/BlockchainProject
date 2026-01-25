@@ -44,7 +44,7 @@ public class Blockchain {
     
 
     static String mainDirectory;
-    static boolean intermediate=false;
+    static boolean intermediate=true;
     static String admin_name;
     static String admin_pwd;
     static String icaadmin_name;
@@ -65,21 +65,18 @@ public class Blockchain {
     public static final String RESET = "\u001B[0m";
     public static final String RED = "\u001B[31m";
     /**
-     * Punto di ingresso dell'applicazione.
-     * Avvia il menu principale e gestisce la creazione/apertura dei progetti.
-     * @param args argomenti da linea di comando (non usati)
-     * @throws IOException in caso di errori I/O
-     * @throws InterruptedException se l'esecuzione viene interrotta
+     * Application entry point.
+     * Starts the main menu and handles project creation/opening.
+     * @param args command line arguments (not used)
+     * @throws IOException in case of I/O errors
+     * @throws InterruptedException if execution is interrupted
      */
     public static void main(String[] args) throws IOException, InterruptedException {
        
 
 
 
-       /*if(!isDockerRunning()){
-           System.err.println("Docker is not running. Please start Docker Desktop and try again.");
-           return;
-       } */
+       
         Scanner in= new Scanner(System.in);
         boolean loop=true;
         
@@ -131,15 +128,7 @@ public class Blockchain {
                     case 2:{
                         System.out.print(GREEN+"Project name: "+RESET);
                         mainDirectory=in.next().replace(" ", "_");
-                        /*System.out.println(GREEN+"Do you want to deploy an Intermediate CA? y/n"+RESET);
-                        if(in.next().equals("y")){
-                            intermediate=true;
-                        }
-                        if(prjs.contains(mainDirectory+" "+(intermediate ? "intermediate":"root"))){
-                            System.err.println(RED+"Project with this name already exists."+RESET);
-                            break;
-                        }*/
-                        intermediate=true;
+                        
                         prjs.add(mainDirectory+" "+(intermediate ? "intermediate":"root"));
                         FileWriter fw = new FileWriter(projects, true);
                         fw.write(mainDirectory+" "+(intermediate ? "intermediate":"root")+"\n");
@@ -334,11 +323,21 @@ public class Blockchain {
     
 
     
+    /**
+     * Checks if Docker is running by querying the server version.
+     * @return true if Docker is active, false otherwise
+     * @throws IOException in case of I/O errors
+     * @throws InterruptedException if execution is interrupted
+     */
     private static boolean isDockerRunning() throws IOException, InterruptedException {
         String output = executeWSLCommandToString("docker info --format '{{.ServerVersion}}'");
         return !output.isEmpty();
     }
 
+    /**
+     * Checks if the Docker containers for the current project are running.
+     * @return true if at least one container is active, false otherwise
+     */
     private static boolean checkContainersRunning(){
         String output = executeWSLCommandToString("cd "+ mainDirectory +" && docker compose ps");
         return output.contains("Up");
@@ -346,24 +345,21 @@ public class Blockchain {
     
     
     /**
-     * Crea una directory invocando un comando in WSL.
-     * @param name nome della directory da creare
+     * Creates a directory in the filesystem using a WSL command.
+     * @param name the name of the directory to create
      */
     private static void createDirectory(String name){
         executeWSLCommand("mkdir "+name);
     }
     
+    
     /**
-     * @throws InterruptedException 
-     * 
-     * 
-     */
-    /**
-     * Prepara e installa i binari necessari per il Certificate Authority se mancanti,
-     * configura e avvia i servizi CA usando WSL.
-     * @param pin password utilizzata per eventuali operazioni sudo in WSL
-     * @throws IOException in caso di errori I/O
-     * @throws InterruptedException se il processo viene interrotto
+     * Prepares and configures the Certificate Authority (CA) environment for the blockchain project.
+     * Installs necessary binaries if missing, configures TLS and organization CA servers,
+     * and starts the CA services using WSL.
+     * @param pin the password used for sudo operations in WSL
+     * @throws IOException in case of I/O errors
+     * @throws InterruptedException if the process is interrupted
      */
     private static void setupCA(String pin) throws IOException, InterruptedException{
         Scanner in = new Scanner(System.in);
@@ -506,7 +502,9 @@ public class Blockchain {
     }
     
     /**
-     * Effettua la richiesta di enrollment al CA server per il node specificato.
+     * Performs the enrollment request to the TLS CA server to obtain TLS certificates.
+     * Creates necessary directories and registers the TLS admin.
+     * @param i index used to identify the CA server (currently not used in the method)
      */
     private static void enrollRequestToCAServer(int i){
         executeWSLCommand("cd "+ mainDirectory +"/fabric-ca-client/tls-ca &&"
@@ -523,6 +521,10 @@ public class Blockchain {
                 + "$(pwd)/"+mainDirectory+"/fabric-ca-client/tls-ca/tlsadmin/msp/keystore/CA_PRIVATE_KEY");
     }
 
+    /**
+     * Restarts the TLS CA server after enabling TLS in the configuration.
+     * Updates the YAML config file to enable TLS and restarts the Docker container.
+     */
     private static void restartCAserverWithTLS(){
         File server_config=new File(""+ mainDirectory +"/fabric-ca-server-tls/fabric-ca-server-config.yaml");
         Yaml yaml= new Yaml();
@@ -558,7 +560,9 @@ public class Blockchain {
     }
     
     /**
-     * Esegue l'enrollment dell'amministratore del CA locale sul server indicato.
+     * Registers and enrolls the root CA admin (rcaadmin).
+     * Creates necessary MSP directories and registers the user with admin privileges.
+     * @param i index used to identify the CA (currently not used in the method)
      */
     private static void enrollCAAdmin(int i) {
         String caAdmin = "admin";
@@ -600,9 +604,9 @@ public class Blockchain {
 
     
     /**
-     * Registra una nuova identità nel CA e prepara la struttura delle cartelle per l'org.
-     * @param i indice usato per costruire i percorsi
-     * @return il nome dell'identity registrata (icaadmin_name nel flusso corrente)
+     * Registers a new identity in the CA and prepares the folder structure for the org.
+     * @param i index used to build paths
+     * @return the name of the registered identity (icaadmin_name in the current flow)
      */
     private static String registerNewIdentity(int i){
         
@@ -641,8 +645,9 @@ public class Blockchain {
     }
     
     /**
-     * Registra e configura l'amministratore per un CA intermedio.
-     * @param i indice del server/CA
+     * Registers and configures the admin for an intermediate CA (icaadmin).
+     * Creates MSP directories, registers the identity, and performs enrollment with CA profile.
+     * @param i index of the intermediate CA server
      */
     private static void registerIntermediateCAAdmin(int i){
         executeWSLCommand("cd "+mainDirectory+"/fabric-ca-client/tls-ca &&"
@@ -676,15 +681,14 @@ public class Blockchain {
         
 
 
-        /*executeWSLCommand("cd "+mainDirectory+" &&"
-                + "mkdir -p fabric-ca-server-int-ca/msp fabric-ca-server-int-ca/tls &&"
-                + "cp bin/fabric-ca-server fabric-ca-server-int-ca &&"
-                + "cp $(pwd)/"+mainDirectory+"/fabric-ca-client/int-ca/icaadmin/msp/signcerts/cert.pem $(pwd)/"+mainDirectory+"/fabric-ca-server-int-ca/msp && cp $(pwd)/"+mainDirectory+"/fabric-ca-client/int-ca/icaadmin/msp/keystore/CA_PRIVATE_KEY $(pwd)/"+mainDirectory+"/fabric-ca-server-int-ca/msp &&"
-                + "cp $(pwd)/"+mainDirectory+"/fabric-ca-server-tls/ca-cert.pem $(pwd)/"+mainDirectory+"/fabric-ca-server-int-ca/tls/tls-ca-cert.pem");
-        */
+        
         
     }
 
+    /**
+     * Copies the intermediate CA admin certificate (icaadmin) from the root CA database
+     * to the intermediate CA database to ensure certificate chain continuity.
+     */
     private static void addIcaadminToDB() {
         String selectSQL = "SELECT * FROM certificates WHERE id = 'icaadmin'";
 
@@ -732,7 +736,8 @@ public class Blockchain {
     
     
     /**
-     * Genera e scrive il file `docker-compose.yaml` per l'ambiente corrente.
+     * Generates and writes the initial docker-compose.yaml file for the blockchain environment,
+     * configuring the network and TLS CA service.
      */
     private static void createDockerComposeYaml(){
         executeWSLCommand("cd "+mainDirectory+" &&"
@@ -757,10 +762,10 @@ public class Blockchain {
     }
     
     /**
-     * Configura la parte TLS per il CA, creando file e directory necessari.
-     * @param i indice del server/CA
-     * @throws FileNotFoundException se un file richiesto non viene trovato
-     * @throws IOException in caso di altri errori I/O
+     * Sets up the TLS part for the CA, creating necessary files and directories.
+     * @param i index of the server/CA
+     * @throws FileNotFoundException if a required file is not found
+     * @throws IOException in case of other I/O errors
      */
     private static void setupCA_TLS(int i) throws FileNotFoundException, IOException{
         try{
@@ -872,11 +877,11 @@ public class Blockchain {
     }
     
     /**
-     * Distribuisce un CA per l'organizzazione, copiando certificati e configurazioni.
-     * @param i indice del CA
-     * @param user_name nome utente di bootstrap utilizzato per la registrazione
-     * @throws FileNotFoundException se un file richiesto non viene trovato
-     * @throws IOException in caso di altri errori I/O
+     * Deploys an organization CA, copying certificates and configurations.
+     * @param i index of the CA
+     * @param user_name bootstrap user name used for registration
+     * @throws FileNotFoundException if a required file is not found
+     * @throws IOException in case of other I/O errors
      */
     private static void deployOrganizationCA(int i, String user_name) throws FileNotFoundException, IOException{
         String server_name= "fabric-ca-server-org"+(i+1);
@@ -961,14 +966,14 @@ public class Blockchain {
     
     
     /**
-     * Aggiunge la definizione del CA al file docker-compose (append).
-     * @param name nome del servizio
-     * @param tls true se TLS è abilitato
-     * @param port porta esposta
-     * @param serverName nome del server CA
-     * @param inter true se è un CA intermedio
-     * @throws FileNotFoundException se un file non viene trovato
-     * @throws IOException in caso di errori I/O
+     * Adds the CA service definition to the docker-compose file (append).
+     * @param name service name
+     * @param tls true if TLS is enabled
+     * @param port exposed port
+     * @param serverName CA server name
+     * @param inter true if it is an intermediate CA
+     * @throws FileNotFoundException if a file is not found
+     * @throws IOException in case of I/O errors
      */
     private static void addCAtoDocker(String name, boolean tls, int port, String serverName, boolean inter) throws FileNotFoundException, IOException{
         Yaml yaml= new Yaml();
@@ -1027,8 +1032,9 @@ public class Blockchain {
     
     
     /**
-     * Distribuisce un CA intermedio copiando i binari e le chiavi necessarie.
-     * @throws IOException in caso di errori I/O
+     * Deploys and configures an intermediate CA, copying binaries and configuring the YAML file
+     * to link it to the root TLS CA.
+     * @throws IOException in case of I/O errors during configuration
      */
     private static void deployIntermediateCA() throws IOException{
         
@@ -1156,6 +1162,10 @@ public class Blockchain {
     
     
     
+    /**
+     * Counts the number of peer organizations registered in the peerOrgs.txt file.
+     * @return the total number of peer organizations
+     */
     private static int get_num_org(){
         File peerOrgs= new File("src\\main\\java\\com\\blockchain\\blockchain\\peerOrgs.txt");
         int count=0;
@@ -1177,10 +1187,10 @@ public class Blockchain {
     
     
     /**
-     * Crea la struttura di directory per le organizzazioni e i loro artefatti.
-     * @param channel_name nome del canale/genesis associato
-     * @throws IOException in caso di errori I/O
-     * @throws InterruptedException 
+     * Creates the directory structure for organizations and their artifacts.
+     * @param channel_name name of the associated channel/genesis
+     * @throws IOException in case of I/O errors
+     * @throws InterruptedException
      */
     private static void mainMenu() throws IOException, InterruptedException{
         Scanner in= new Scanner(System.in);
@@ -1201,9 +1211,7 @@ public class Blockchain {
             System.out.println("1) Add peer organization");
             System.out.println("2) Remove peer organization");
             System.out.println("3) Modify organization");
-            System.out.println("4) Create new channel");
-            System.out.println("5) Remove channel");
-            System.out.println("6) Exit");
+            System.out.println("4) Exit");
             System.out.print("--> "+RESET);
             int risp= in.nextInt();
             
@@ -1344,20 +1352,49 @@ public class Blockchain {
                     switch(choice){
                         case 1:{
                             addOrgtoChannel(organization_name, channel_peer,peers_names.get(0), channel_name);
-                            for(int i=0;i<num_peer;i++){
-                                executeWSLCommand("docker cp "+mainDirectory+"/bin/"+channel_name+"_block.pb "+peers_names.get(i)+":/etc/hyperledger/fabric/");
+                            executeWSLCommand("docker cp "+mainDirectory+"/bin/"+channel_name+"_block.pb "+peers_names.get(0)+":/etc/hyperledger/fabric/");
                                 
-                                String dockerCmd =
-                                    "docker exec " + peers_names.get(i) + " bash -c '"
+                            String dockerCmd =
+                                "docker exec " + peers_names.get(0) + " bash -c '"
+                                + "export CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/mspAdmin && "
+                                + "export CORE_PEER_TLS_ENABLED=true && "
+                                + "export CORE_PEER_ADDRESS="+peers_names.get(0)+":7051 &&"
+                                + "export CORE_PEER_TLS_ROOTCERT_FILE="+(intermediate ?"/etc/hyperledger/fabric/tls/ca-chain.pem": "/etc/hyperledger/fabric/msp/cacerts/127-0-0-1-7054.pem")+" && "
+                                + "export CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/msp/signcerts/cert.pem && "
+                                + "export CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/msp/keystore/" + executeWSLCommandToString("ls "+mainDirectory+"/organizations/peerOrganizations/"+organization_name+"/peers/"+peers_names.get(0)+"/msp/keystore/ | grep _sk").trim() + " && "
+                                + "peer channel join -b /etc/hyperledger/fabric/" + channel_name + "_block.pb'";
+                            executeWSLCommand(dockerCmd);
+                            create_chaincode_for_one_peer(channel_name, organization_name, peers_names.get(0), peer_ports.get(0));
+                            if (num_peer>1){
+                                for(int i=1;i<num_peer;i++){
+                                    executeWSLCommand("docker exec " + peers_names.get(i) + " bash -c '"
+                                    + "peer channel fetch 0 "+channel_name+"_block.pb -o " + orderer_name + ":" + orderer_port + " -c "+channel_name+" --tls --cafile "+(intermediate ? "/etc/hyperledger/fabric/tls/ca-chain.pem" : "/etc/hyperledger/fabric/tls/tls-ca-cert.pem")+" '");
+                                    executeWSLCommand("docker exec " + peers_names.get(i) + " bash -c '"
                                     + "export CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/mspAdmin && "
-                                    + "export CORE_PEER_TLS_ENABLED=true && "
-                                    + "export CORE_PEER_ADDRESS="+peers_names.get(i)+":7051 &&"
-                                    + "export CORE_PEER_TLS_ROOTCERT_FILE="+(intermediate ?"/etc/hyperledger/fabric/tls/ca-chain.pem": "/etc/hyperledger/fabric/msp/cacerts/127-0-0-1-7054.pem")+" && "
-                                    + "export CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/msp/signcerts/cert.pem && "
-                                    + "export CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/msp/keystore/" + executeWSLCommandToString("ls "+mainDirectory+"/organizations/peerOrganizations/"+organization_name+"/peers/"+peers_names.get(i)+"/msp/keystore/ | grep _sk").trim() + " && "
-                                    + "peer channel join -b /etc/hyperledger/fabric/" + channel_name + "_block.pb'";
-                                executeWSLCommand(dockerCmd);
-                                //peers_channels.add(channel_name);
+                                    + "peer channel join -b "+channel_name+"_block.pb'");
+                                    //peers_channels.add(channel_name);
+                                    executeWSLCommand(
+                                        "cd "+mainDirectory+" && " +
+                                            "export CORE_PEER_LOCALMSPID="+org_name+" && " +
+                                            "export CORE_PEER_MSPCONFIGPATH=$PWD/"+mainDirectory+"/organizations/peerOrganizations/"+org_name+"/msp && " +
+                                            "export CORE_PEER_ADDRESS="+ peers_names.get(i) +":"+port+" && " +
+                                            "export CORE_PEER_TLS_ENABLED=true && "+
+                                            "export FABRIC_CFG_PATH=$PWD/"+mainDirectory+"/peers_bin/"+ peers_names.get(i) +"/config/ && " +      
+                                            "./peer lifecycle chaincode package mycc.tar.gz " +
+                                            "--path $PWD/"+mainDirectory+"/atcc " +
+                                            "--lang golang " +
+                                            "--label mycc_1.0" 
+                                    );
+
+                                    
+                                    //Install chaincode
+
+                                    executeWSLCommand("docker cp $PWD/"+mainDirectory+"/mycc.tar.gz "+peers_names.get(i)+":/etc/hyperledger/fabric");
+                                    executeWSLCommand("cd "+mainDirectory+" &&"
+                                        + "docker exec " + peers_names.get(i) + " bash -c '"+
+                                        "export CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/mspAdmin && " +
+                                        "peer lifecycle chaincode install /etc/hyperledger/fabric/mycc.tar.gz'");
+                                }
                             }
                             organization peerOrg= new organization(organization_name, peers_names, peer_ports, mainDirectory, peers_channels);
                             try(FileWriter filew= new FileWriter("src\\main\\java\\com\\blockchain\\blockchain\\organizations.txt", true);
@@ -1452,7 +1489,7 @@ public class Blockchain {
                     int i=1;
                     System.out.println(GREEN);
                     while((line=reader.readLine())!=null){
-                        System.out.println(i+")"+line);
+                        System.out.println(i+")"+line.split("/")[1]);
                         i++;
                     }
                     System.out.println(i+") "+"Exit");
@@ -1469,15 +1506,15 @@ public class Blockchain {
                     while((line=reader.readLine())!=null){
                         pOr.add(line);
                         if(i==org_choice){
-                            organization_name=line;
+                            organization_name=line.split("/")[1];
                         }
                         i++;
                     }
                     reader.close();
                     FileWriter fw = new FileWriter(peerOrgs);
                     for(int j=0;j<pOr.size();j++){
-                        if(pOr.get(j).equals(organization_name)==false){
-                            fw.write(mainDirectory+"/"+pOr.get(j)+"\n");
+                        if((pOr.get(j).split("/")[1]).equals(organization_name)==false){
+                            fw.write(pOr.get(j)+"\n");
                         }
                     }
                     fw.close();
@@ -1489,7 +1526,36 @@ public class Blockchain {
                         }                                                       
                         check=executeWSLCommandLS(mainDirectory+"/organizations/peerOrganizations/");
                     }while(check.contains(organization_name+" "));
-                    
+
+                    LinkedList<organization> orgs= getOrganizationsCreated();
+                    for(int j=0;j<orgs.size();j++){
+                        if(orgs.get(j).getOrganization_name().equals(organization_name)){
+                            for(int p=0;p<orgs.get(j).getPeers().size();p++){
+                                executeWSLCommand("rm -rf "+mainDirectory+"/peers_bin/"+orgs.get(j).getPeers().get(p));
+                                executeWSLCommand("docker rm -f "+orgs.get(j).getPeers().get(p));
+                            }
+                        }
+                    }
+
+                    for(int j=0;j<orgs.size();j++){
+                        if(orgs.get(j).getOrganization_name().equals(organization_name)){
+                            orgs.remove(j);
+                            break;
+                        }
+                    }
+                    File orgFile= new File("src\\main\\java\\com\\blockchain\\blockchain\\organizations.txt");
+                    FileWriter orgFW= new FileWriter(orgFile);
+                    BufferedWriter orgBW= new BufferedWriter(orgFW);
+                    ObjectMapper mapper= new ObjectMapper();
+                    for(int j=0;j<orgs.size();j++){
+                        String jsonString= mapper.writeValueAsString(orgs.get(j));
+                        orgBW.write(jsonString);
+                        orgBW.newLine();
+                    }
+
+                    orgBW.close();
+                    orgFW.close();
+
                     System.out.println("Organization "+organization_name+" removed.");
                     break;
                 }
@@ -1516,39 +1582,8 @@ public class Blockchain {
                     organizationMenu(organization_name.split("/")[1],peer_number+1);
                     break;
                 }
+                
                 case 4:{
-                    System.out.print(GREEN+"Channel name: "+RESET);
-                    String channel_name=in.next().toLowerCase();
-                    createChannel(null, first_peer, channel_name);
-                    break;
-                }
-                case 5:{
-                    File channels= new File("src\\main\\java\\com\\blockchain\\blockchain\\channels.txt");
-                    BufferedReader reader= new BufferedReader(new FileReader(channels));
-                    System.out.print(GREEN+"Select the channel to remove: "+RESET);
-                    String line;
-                    int i=1;
-                    LinkedList<String> chs= new LinkedList<String>();
-                    System.out.println(GREEN);
-                    while((line=reader.readLine())!=null){
-                        System.out.println(i+")"+line);
-                        chs.add(line);
-                        i++;
-                    }
-                    System.out.println(i+") Exit");
-                    System.out.print("--> "+RESET);
-                    int channel=in.nextInt();
-                    if(channel==i){
-                        break;
-                    }
-                    String channel_name=chs.get(channel);
-                    executeWSLCommand("cd "+mainDirectory+"/bin &&"
-                            + "rm -f "+channel_name+"_block.pb");
-                    removeChannelFromFile(channel_name);
-                    System.out.println("Channel "+channel_name+" removed.");
-                    break;
-                }
-                case 6:{
                     k=false;
                     break;
                 }
@@ -1561,6 +1596,15 @@ public class Blockchain {
         
     }
 
+    /**
+     * Adds an organization to an existing channel by modifying configtx.yaml and updating the configuration.
+     * @param organization_name the name of the organization to add
+     * @param channel_peer the channel peer used for the update
+     * @param org_peer the organization's peer
+     * @param channelName the channel name
+     * @throws IOException in case of I/O errors
+     * @throws InterruptedException if execution is interrupted
+     */
     private static void addOrgtoChannel(String organization_name, String channel_peer, String org_peer, String channelName) throws IOException, InterruptedException{
         File file = new File(mainDirectory + "/bin/configtx.yaml");
         
@@ -1727,6 +1771,12 @@ public class Blockchain {
 
     }
 
+    /**
+     * Counts the number of peers for a given organization.
+     * @param organization_name the name of the organization
+     * @return the number of peers in the organization
+     * @throws IOException in case of I/O errors
+     */
     private static int get_num_peers(String organization_name) throws IOException{
         LinkedList<organization> organizations_creted= getOrganizationsCreated();
         int num_peers=0;
@@ -1739,6 +1789,11 @@ public class Blockchain {
         return num_peers;
     }
 
+    /**
+     * Removes a channel from the channels.txt file.
+     * @param channel_name the name of the channel to remove
+     * @throws IOException in case of I/O errors
+     */
     private static void removeChannelFromFile(String channel_name) throws IOException{
         File channels= new File("src\\main\\java\\com\\blockchain\\blockchain\\channels.txt");
         BufferedReader reader= new BufferedReader(new FileReader(channels));
@@ -1757,6 +1812,13 @@ public class Blockchain {
         fw.close();
     }
 
+    /**
+     * Displays the organization menu for managing peers and channels.
+     * @param organization_name the name of the organization
+     * @param peer_number the number of peers in the organization
+     * @throws IOException in case of I/O errors
+     * @throws InterruptedException if execution is interrupted
+     */
     private static void organizationMenu(String organization_name, int peer_number) throws IOException, InterruptedException{
         Scanner in= new Scanner(System.in);
         boolean k=true;
@@ -1773,17 +1835,6 @@ public class Blockchain {
                     BufferedReader reader= new BufferedReader(new FileReader(channels));
                     System.out.print(GREEN+"Peer name to add: "+RESET);
                     String peer_name=in.next()+"."+organization_name;
-                    /*do{
-                        System.out.print(GREEN+"Peer port: "+RESET);
-                        int peer_port=in.nextInt();
-                        if(ports_used.contains(peer_port)==false){
-                            break;
-                        }else{
-                            System.out.println(RED+"Port already used, choose another one."+RESET);
-                        }
-                    }while(true);
-                    System.out.println(GREEN+"Peer port: "+RESET);
-                    int peer_port=in.nextInt();*/
 
                     System.out.print(GREEN+"Select a channel: "+RESET);
                     String line;
@@ -1792,12 +1843,12 @@ public class Blockchain {
                     LinkedList<String> chs= new LinkedList<String>();
                     while((line=reader.readLine())!=null){
                         System.out.println(i+")"+line.split("/")[1]);
-                        chs.add(line);
+                        chs.add(line.split("/")[1]);
                         i++;
                     }
                     System.out.print("--> "+RESET);
                     int channel_risp=in.nextInt();
-                    String channel_name=chs.get(channel_risp).split("/")[1];
+                    String channel_name=chs.get(channel_risp-1);
                     reader.close();
                     executeWSLCommand("cd "+mainDirectory+"/organizations/peerOrganizations/"+organization_name+"/peers &&"
                                 + "mkdir "+peer_name+" &&"
@@ -1903,7 +1954,18 @@ public class Blockchain {
                     System.out.println("Peer "+peer_name+" removed.");
 
                     removeServiceFromDockerCompose(peer_name);
-
+                    LinkedList<String> updated_peers= new LinkedList<String>();
+                    for(int i=0;i<peers_names.size();i++){
+                        if(peers_names.get(i).equals(peer_name)==false){
+                            updated_peers.add(peers_names.get(i));
+                        }
+                    }
+                    for(int j=0;j<organizations_creted.size();j++){
+                        if(organizations_creted.get(j).getOrganization_name().equals(organization_name)){
+                            organizations_creted.get(j).setPeers(updated_peers);
+                            break;
+                        }   
+                    }
                     //update del file organizations.txt
                     try(FileWriter filew= new FileWriter("src\\main\\java\\com\\blockchain\\blockchain\\organizations.txt", false);
                         BufferedWriter bw= new BufferedWriter(filew)){
@@ -1928,6 +1990,11 @@ public class Blockchain {
         }while(k);
     }
 
+    /**
+     * Retrieves the orderer name associated with a given channel.
+     * @param channel_name the name of the channel
+     * @return the orderer name for the channel
+     */
     private static String get_orderer_name(String channel_name){
         File orderers= new File("src\\main\\java\\com\\blockchain\\blockchain\\orderers.txt");
         try{
@@ -1935,7 +2002,7 @@ public class Blockchain {
             String line;
             while((line=reader.readLine())!=null){
                 if(line.contains(channel_name)){
-                    return line.split("/")[0];
+                    return line.split("/")[1];
                 }
             }
             reader.close();
@@ -1945,6 +2012,11 @@ public class Blockchain {
         return null;
     }
 
+    /**
+     * Retrieves the orderer port associated with a given channel.
+     * @param channel_name the name of the channel
+     * @return the orderer port for the channel
+     */
     private static int get_orderer_port(String channel_name){
         File orderers= new File("src\\main\\java\\com\\blockchain\\blockchain\\orderers.txt");
         try{
@@ -1962,6 +2034,12 @@ public class Blockchain {
         return -1;
     }
 
+    /**
+     * Removes a service from the docker-compose.yaml file.
+     * @param name the name of the service to remove
+     * @throws FileNotFoundException if the file is not found
+     * @throws IOException in case of I/O errors
+     */
     private static void removeServiceFromDockerCompose(String name) throws FileNotFoundException, IOException{
         String path=executeWSLCommandToString("echo $(pwd)");
         executeWSLCommand("cp "+path+"/"+mainDirectory+"/docker-compose.yaml "+path+"/src/main/java/com/blockchain/blockchain/docker-compose.yaml");
@@ -1988,6 +2066,10 @@ public class Blockchain {
         executeWSLCommand("mv "+path+"/src/main/java/com/blockchain/blockchain/docker-compose.yaml "+path+"/"+mainDirectory+"/docker-compose.yaml");
     }
 
+    /**
+     * Counts the number of orderers in the system.
+     * @return the total number of orderers
+     */
     private static int get_num_orderers(){
         int num_orderer=0;
         try{
@@ -2020,6 +2102,9 @@ public class Blockchain {
         return organizations_creted;
     }
 
+    /**
+     * Updates the configtx.yaml file with the current organizations and orderers.
+     */
     private static void updateConfigtx_yaml(){
         File configtx_file= new File("src\\main\\java\\com\\blockchain\\blockchain\\configtx.yaml");
         Yaml yaml= new Yaml();
@@ -2054,6 +2139,13 @@ public class Blockchain {
         }
     }
 
+    /**
+     * Creates a new channel with the specified organization and peer.
+     * @param organization_name the name of the organization
+     * @param peer_name the name of the peer
+     * @param channel_name the name of the channel to create
+     * @throws IOException in case of I/O errors
+     */
     private static void createChannel(String organization_name, String peer_name, String channel_name) throws IOException{
         //Salviamo il nome del canale su File
         File channels= new File("src\\main\\java\\com\\blockchain\\blockchain\\channels.txt");
@@ -2091,11 +2183,11 @@ public class Blockchain {
     }
     
     /**
-     * Esegue un aggiornamento di canale per aggiungere/aggiornare l'organizzazione o il peer.
-     * @param channel_name nome del canale
-     * @param organization_name nome dell'organizzazione da aggiornare
-     * @param peer_name nome del peer coinvolto
-     * @throws IOException in caso di errori I/O
+     * Performs a channel update to add/update the organization or peer.
+     * @param channel_name the name of the channel
+     * @param organization_name the name of the organization to update
+     * @param peer_name the name of the peer involved
+     * @throws IOException in case of I/O errors
      */
     private static void channelUpdate(String channel_name, String organization_name, String peer_name) throws IOException{
         executeWSLCommand("export CORE_PEER_LOCALMSPID=Org1MSP && "
@@ -2165,7 +2257,7 @@ public class Blockchain {
     }
     
     /**
-     * Scarica i binari dell'orderer (se non presenti) e prepara la struttura locale.
+     * Downloads the orderer binaries (if not present) and prepares the local structure.
      */
     public static void download_orderer_bin(){
         if(Files.exists(Paths.get(mainDirectory+"/peers_bin/original_file"))){
@@ -2183,8 +2275,8 @@ public class Blockchain {
     }
     
     /**
-     * Copia i file binari dell'orderer nella cartella dell'orderer specificata.
-     * @param orderer_name nome dell'orderer (es. orderer1.example.com)
+     * Copies the orderer binary files to the specified orderer folder.
+     * @param orderer_name the name of the orderer (e.g., orderer1.example.com)
      */
     private static void copy_orderer_bin(String orderer_name){
         executeWSLCommand("cd "+mainDirectory+"/orderers_bin &&"
@@ -2195,6 +2287,10 @@ public class Blockchain {
     
     /**
      * Scarica i binari del peer e li prepara per l'uso locale.
+     */
+    /**
+     * Downloads the peer binaries if not already present, or copies from an existing original file directory.
+     * Downloads Hyperledger Fabric peer binaries from GitHub and extracts them.
      */
     public static void download_peer_bin(){
         if(Files.exists(Paths.get(mainDirectory+"/orderers_bin/original_file"))){
@@ -2212,9 +2308,9 @@ public class Blockchain {
     }
     
     /**
-     * Copia i binari del peer nella cartella del peer dell'organizzazione specificata.
-     * @param peer_name nome del peer (es. peer0.org1.example.com)
-     * @param org_name nome dell'organizzazione
+     * Copies the peer binaries to the specified peer's directory for the given organization.
+     * @param peer_name the name of the peer (e.g., peer0.org1.example.com)
+     * @param org_name the name of the organization
      */
     private static void copy_peer_bin(String peer_name, String org_name){
         executeWSLCommand("cd "+mainDirectory+"/peers_bin &&"
@@ -2223,13 +2319,18 @@ public class Blockchain {
         executeWSLCommand("cp -r "+mainDirectory+"/peers_bin/original_file/* "+mainDirectory+"/peers_bin/"+peer_name);
     }
     
+    
     /**
-     * Configura il file core.yaml del peer per l'organizzazione specificata.
-     * @param peer_name nome del peer
-     * @param org_name nome dell'organizzazione
-     * @return 0 se successo, un intero diverso per errore
-     * @throws FileNotFoundException se un file richiesto non viene trovato
-     * @throws IOException in caso di altri errori I/O
+     * Configures the core.yaml file for the specified peer.
+     * Sets up peer identity, network settings, gossip, TLS, BCCSP, ledger, and operations configurations.
+     * @param peer_name the name of the peer
+     * @param second_peer the name of the second peer for bootstrap (can be null)
+     * @param second_peer_port the port of the second peer
+     * @param org_name the name of the organization
+     * @param peer_number the peer number for port calculation
+     * @param existing_channel the name of the existing channel (can be null)
+     * @throws FileNotFoundException if the core.yaml file is not found
+     * @throws IOException in case of I/O errors
      */
     public static void configure_peer_core(String peer_name, String second_peer, int second_peer_port, String org_name, int peer_number,String existing_channel) throws FileNotFoundException, IOException{
         Scanner in= new Scanner(System.in);
@@ -2289,21 +2390,10 @@ public class Blockchain {
         // Bootstrap
         String bootstrap;
         if(existing_channel!=null){
-            /*File channel_file= new File("src\\main\\java\\com\\blockchain\\blockchain\\channels.txt");
-            BufferedReader reader= new BufferedReader(new FileReader(channel_file));
-            String line;
-            String channel_peer="";
-            while((line=reader.readLine())!=null){
-                if(line.contains(existing_channel)){
-                    channel_peer=line.split("/")[2];
-                }
-            }
-            reader.close();
-            bootstrap= channel_peer +":7051";*/
             bootstrap="" ;
         }else{
             if(second_peer!=null){
-                bootstrap= second_peer +":7051"/*+(7051+((get_num_org()+get_num_other_peers(org_name)-1)*1000)+(peer_number*1000))*/;
+                bootstrap= second_peer +":7051";
             }else{
                 bootstrap= "";
             }
@@ -2464,16 +2554,6 @@ public class Blockchain {
         
         // Select state database type
         String stateDb;
-        /*System.out.println(GREEN+"Choose state database: ");
-        System.out.println("1) goleveldb");
-        System.out.println("2) CouchDB");
-        System.out.print("--> "+RESET);
-        String dbChoice=in.next();
-        if(dbChoice.equals("2")){
-            stateDb="CouchDB";
-        }else{
-            stateDb="goleveldb";
-        }*/
        stateDb="goleveldb";
         
         
@@ -2553,19 +2633,6 @@ public class Blockchain {
         String tlsPath=path+"/"+mainDirectory+"/organizations/peerOrganizations/"+org_name+"/peers/"+peer_name+"/tls";
         LinkedList<Integer> ports= new LinkedList<Integer>();
         boolean cDB=false;
-        /*
-        if(stateDb.equals("CouchDB")){
-            //Controlliamo se CouchDB è già in esecuzione
-            if(CouchDB.exists()){
-                System.out.println("CouchDB is running");
-            }else{
-                System.out.println("Starting CouchDB...");
-                new CouchDB();
-                waitForContainer("couchdb");
-                cDB=true;
-            }
-        }
-        */
         //Aggiunta del peer al file docker-compose.yaml
         add_peer_to_docker(peer_name,org_name,cfgPath,mspAdminPath, mspPath ,tlsPath,ports, cDB, tlsEnabled, bootstrap, peer_number);
         
@@ -2583,13 +2650,15 @@ public class Blockchain {
     
     
     /**
-     * Configura l'orderer (MSP, TLS e cluster) per una data organizzazione.
-     * @param orderer_name nome dell'orderer
-     * @param org_name nome dell'organizzazione
-     * @param needClusterConfig true se è necessario aggiungere la configurazione cluster
-     * @return 0 se successo, diverso in caso di errore
-     * @throws FileNotFoundException se un file richiesto non viene trovato
-     * @throws IOException in caso di altri errori I/O
+     * Configures the orderer (MSP, TLS, and cluster) for the given organization.
+     * @param orderer_name the name of the orderer
+     * @param port the port for the orderer
+     * @param org_name the name of the organization
+     * @param needClusterConfig true if cluster configuration is needed
+     * @param channel_name the name of the channel
+     * @return the port used by the orderer
+     * @throws FileNotFoundException if required files are not found
+     * @throws IOException in case of I/O errors
      */
     public static int configure_orderer(String orderer_name, int port, String org_name, boolean needClusterConfig, String channel_name) throws FileNotFoundException, IOException{
         File orderers= new File("src\\main\\java\\com\\blockchain\\blockchain\\orderers.txt");
@@ -2846,8 +2915,9 @@ public class Blockchain {
     
     
     /**
-     * Scrive o aggiorna il file config.yaml richiesto dall'orderer/peer.
-     * @param path percorso dove scrivere il file
+     * Writes or updates the config.yaml file required by the orderer/peer.
+     * @param path the path where the file should be written
+     * @param org_name the name of the organization
      */
     private static void createConfig_yaml(String path, String org_name){
         if(intermediate){
@@ -2895,10 +2965,10 @@ public class Blockchain {
     }
     
     /**
-     * Registra e effettua l'enrollment dell'amministratore dell'organizzazione.
-     * @param org_name nome dell'organizzazione
-     * @param peer_org true se l'organizzazione è una peer organization
-     * @throws IOException in caso di errori I/O
+     * Registers and enrolls the organization admin.
+     * @param org_name the name of the organization
+     * @param peer_org true if the organization is a peer organization
+     * @throws IOException in case of I/O errors
      */
     private static void organizationAdminRegistrationEnroll(String org_name, boolean peer_org) throws IOException{
         String name="Admin@"+org_name;
@@ -2941,9 +3011,6 @@ public class Blockchain {
                         
             executeWSLCommand("mkdir -p "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/admincerts && "
                     + "cp  "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/signcerts/* "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/admincerts/");
-            //executeWSLCommand("cp  "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/signcerts/* "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/signcerts/");
-            //executeWSLCommand("cp  "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/cacerts/* "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/cacerts/");
-            //executeWSLCommand("cp  "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/users/Admin@"+org_name+"/msp/keystore/* "+mainDirectory+"/organizations/"+org_directory+"/"+org_name+"/msp/keystore/");
             //TLS
             executeWSLCommand("cd "+mainDirectory+"/fabric-ca-client &&"+
                     "./fabric-ca-client enroll "
@@ -3010,11 +3077,11 @@ public class Blockchain {
     
     
     /**
-     * Crea i certificati MSP/TLS per un nodo (peer o orderer) all'interno dell'organizzazione.
-     * @param org_name nome dell'organizzazione
-     * @param node_name nome del nodo
-     * @param peer_org true se il nodo è un peer, false se è un orderer
-     * @throws IOException in caso di errori I/O
+     * Creates MSP/TLS certificates for a node (peer or orderer) within the organization.
+     * @param org_name the name of the organization
+     * @param node_name the name of the node
+     * @param peer_org true if the node is a peer, false if it is an orderer
+     * @throws IOException in case of I/O errors
      */
     private static void create_msp_tls_certificate(String org_name, String node_name, boolean peer_org) throws IOException {
         String org_directory = peer_org
@@ -3101,8 +3168,8 @@ public class Blockchain {
     
 
     /**
-     * Imposta il profilo TLS per il server (modifica file temporanei di configurazione).
-     * @throws IOException in caso di errori I/O
+     * Sets the TLS profile for the server (modifies temporary configuration files).
+     * @throws IOException in case of I/O errors
      */
     private static void setProfileTLSForServer() throws IOException{
         
@@ -3142,8 +3209,8 @@ public class Blockchain {
     }
 
     /**
-     * Imposta il profilo TLS per il client.
-     * @throws IOException in caso di errori I/O
+     * Sets the TLS profile for the client.
+     * @throws IOException in case of I/O errors
      */
     private static void setProfileTLSForClient() throws IOException{
         
@@ -3182,8 +3249,8 @@ public class Blockchain {
     }
 
     /**
-     * Ripristina il profilo TLS originale rimuovendo modifiche temporanee.
-     * @throws IOException in caso di errori I/O
+     * Restores the original TLS profile by removing temporary modifications.
+     * @throws IOException in case of I/O errors
      */
     private static void resetProfileTLS() throws IOException{
 
@@ -3225,14 +3292,19 @@ public class Blockchain {
     
     
     /**
-     * Aggiunge la definizione del peer al docker-compose (append) con i volumi e le porte specificate.
-     * @param peerName nome del peer
-     * @param cfgPath percorso della configurazione
-     * @param mspPath percorso MSP
-     * @param tlsPath percorso TLS
-     * @param ports lista di porte usate
-     * @param couchDB true se il peer deve avere CouchDB associato
-     * @throws IOException in caso di errori I/O
+     * Adds the peer definition to the docker-compose file (append) with specified volumes and ports.
+     * @param peerName the name of the peer
+     * @param org_name the name of the organization
+     * @param cfgPath the path to the configuration
+     * @param mspAdminPath the path to the MSP admin
+     * @param mspPath the path to the MSP
+     * @param tlsPath the path to the TLS
+     * @param ports the list of ports used
+     * @param couchDB true if the peer should have associated CouchDB
+     * @param tls_enabled true if TLS is enabled
+     * @param bootstrap the bootstrap peer
+     * @param peer_number the peer number
+     * @throws IOException in case of I/O errors
      */
     private static void add_peer_to_docker(String peerName, String org_name, String cfgPath, String mspAdminPath ,String mspPath, String tlsPath, LinkedList<Integer> ports, boolean couchDB, boolean tls_enabled, String bootstrap, int peer_number) throws IOException{
         Yaml yaml = new Yaml();
@@ -3329,6 +3401,13 @@ public class Blockchain {
         }
     }
     
+    /**
+     * Counts the number of other peers in the docker-compose that are not in the specified organization.
+     * @param org_name the name of the organization to exclude
+     * @return the count of other peers
+     * @throws FileNotFoundException if the docker-compose.yaml file is not found
+     * @throws IOException in case of I/O errors
+     */
     private static int get_num_other_peers(String org_name) throws FileNotFoundException, IOException{
         int count=0;
         Yaml yaml = new Yaml();
@@ -3358,16 +3437,16 @@ public class Blockchain {
     }
        
     /**
-     * Aggiunge la definizione dell'orderer al docker-compose con volumi, porte e paths specificati.
-     * @param ordererName nome dell'orderer
-     * @param orgName nome dell'organizzazione
-     * @param cfgPath percorso della configurazione
-     * @param mspPath percorso MSP
-     * @param tlsPath percorso TLS
-     * @param ledgerPath percorso ledger
-     * @param keysPath percorso chiavi
-     * @param ports lista di porte da esporre
-     * @throws IOException in caso di errori I/O
+     * Adds the orderer definition to the docker-compose with volumes, ports, and specified paths.
+     * @param ordererName the name of the orderer
+     * @param orgName the name of the organization
+     * @param cfgPath the path to the configuration
+     * @param mspPath the path to the MSP
+     * @param tlsPath the path to the TLS
+     * @param ledgerPath the path to the ledger
+     * @param keysPath the path to the keys
+     * @param ports the list of ports to expose
+     * @throws IOException in case of I/O errors
      */
     private static void add_orderer_to_docker(String ordererName, String orgName, String cfgPath, String mspPath, String tlsPath, String ledgerPath, String keysPath, LinkedList<Integer> ports)throws IOException{
         Yaml yaml = new Yaml();
@@ -3425,6 +3504,14 @@ public class Blockchain {
      * @return il nome del canale generato
      * @throws FileNotFoundException se qualche file richiesto non viene trovato
      * @throws IOException in caso di errori I/O
+     */
+    /**
+     * Creates and writes the initial genesis block using local tools (configtxgen/configtxlator) and saves it in the bin folder.
+     * @param org_name the name of the organization
+     * @param peers the list of peers
+     * @param channel_name the name of the channel
+     * @throws FileNotFoundException if required files are not found
+     * @throws IOException in case of I/O errors
      */
     private static void createGenesisBlock(String org_name, LinkedList<String> peers, String channel_name) throws FileNotFoundException, IOException{
         
@@ -3562,22 +3649,11 @@ public class Blockchain {
         host.put("ClientTLSCert", path+"/"+mainDirectory + "/organizations/ordererOrganizations/Consenters/orderers/" + orderer_name + "/tls/signcerts/cert.pem");
         host.put("ServerTLSCert", path+"/"+mainDirectory + "/organizations/ordererOrganizations/Consenters/orderers/" + orderer_name + "/tls/signcerts/cert.pem");
         SectionOrderer.put("EtcdRaft", Map.of("Consenters", Arrays.asList(host)));
-        /* 
-        host3 = new HashMap<>();
-        host3.put("Name", "Host3MSP");
-        host3.put("ID", "Host3MSP");
-        host3.put("MSPDir", path+"/"+mainDirectory + "/organizations/ordererOrganizations/Consenters/orderers/orderer3.example.com/msp");
-        host3.put("Policies", createOrgPolicies("Host3MSP"));*/
+        
 
         //Addresses nell'orderer
         List<String> addresses = new ArrayList<>();
         addresses.add(orderer_name + ":" + orderer_port);
-        //addresses.add("orderer2.example.com:"+port2);
-        //addresses.add("orderer3.example.com:"+port3);
-        
-
-        //List<Map<String,Object>> appOrgs = Arrays.asList(host1, host2, host3);
-        //applicationSection.put("Organizations", appOrgs);
 
         SectionOrderer.put("Organizations", Arrays.asList(consenterOrg)); 
         SectionOrderer.put("Addresses", addresses);
@@ -3591,11 +3667,6 @@ public class Blockchain {
 
         
         Map<String, Object> SectionApplication=(Map<String, Object>) SampleAppChannelEtcdRaft.get("Application");
-        /*Org.put("Name", "org1");
-        Org.put("ID", "org1");
-        Org.put("MSPDir", path+"/"+mainDirectory + "/organizations/peerOrganizations/org1/msp");
-        Org.put("Policies", createOrgPolicies("org1"));
-        SectionApplication.put("Organizations", Arrays.asList(Org));*/
         SectionApplication.put("Policies", createOrdererPolicies(false));
         SectionApplication.remove("ACLs");
         SectionApplication.put("Organizations", Arrays.asList(peerOrg));
@@ -3627,26 +3698,8 @@ public class Blockchain {
         appPolicies.put("Writers", createOrdererPolicies(false).get("Writers"));
         appPolicies.put("Admins", createOrdererPolicies(false).get("Admins"));
 
-        //applicationSection.put("Policies", appPolicies);
-        //applicationChannel.put("Application", applicationSection);
+        
 
-        
-        //profiles.put("ApplicationChannel", applicationChannel);
-        
-        
-        
-        // Infine: inserisci "Profiles" nella root del tuo data
-        //data.put("Profiles", profiles);
-        
-        //Aggiunta Consortiums al profilo SampleAppChannelEtcdRaft
-        /*Map<String,Object> SampleAppChannelEtcdRaft_profile=(Map<String,Object>)((Map<String,Object>) data.get("Profiles")).get("SampleAppChannelEtcdRaft");
-        sampleConsortium = new LinkedHashMap<>();
-        sampleConsortium.put("Organizations", Arrays.asList(host1,host2,host3));
-
-        consortiums = new LinkedHashMap<>();
-        consortiums.put("SampleConsortium", sampleConsortium);*/
-
-        //data.put("Consortiums", consortiums);
         // ---------- Profilo OrdererGenesis ----------
         Map<String, Object> ordererGenesis = new HashMap<>();
         ordererGenesis.putAll(SampleAppChannelEtcdRaft);
@@ -3711,26 +3764,23 @@ public class Blockchain {
         
     }
 
+    /**
+     * Adds a volume to a running Docker container by copying the host path to the container path.
+     * @param containerName the name of the container
+     * @param hostPath the path on the host
+     * @param containerPath the path in the container
+     */
     private static void addVolumeToContainer(String containerName, String hostPath, String containerPath) {
         executeWSLCommand("docker cp " + hostPath + " " + containerName + ":" + containerPath);
     }
 
-    /*private static void create_organization_MSP(String orgName, boolean isPeerOrg) {
-        String basePath = "$(pwd)/"+mainDirectory + "/organizations/" + (isPeerOrg ? "peerOrganizations/" : "ordererOrganizations/") + orgName;
-        executeWSLCommand("cd " + mainDirectory + "/fabric-ca-client &&"
-                + "./fabric-ca-client register -d --id.name "+orgName+" --id.secret "+orgName+"_PSW "
-                + "-u https://127.0.0.1:7054 "
-                + "--tls.certfiles $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem "
-                + "--mspdir $(pwd)/"+mainDirectory+"/fabric-ca-client/tls-ca/rcaadmin/msp "
-                + "--id.type "+(isPeerOrg?"peer":"orderer"));
-        // Enrollment per MSP (identità)
-        executeWSLCommand("cd " + mainDirectory + "/fabric-ca-client &&"
-                + "./fabric-ca-client enroll -u https://"+orgName+":"+orgName+"_PSW@127.0.0.1:7054 "
-                + "--mspdir "+basePath+"/msp "
-                + "--csr.hosts peer0.org1 "
-                + "--tls.certfiles $(pwd)/" + mainDirectory + "/fabric-ca-client/tls-root-cert/tls-ca-cert.pem");
-    }*/
     
+    
+    /**
+     * Creates the orderer policies map.
+     * @param blockValidation true if block validation policy is needed
+     * @return the map of policies
+     */
     private static Map<String,Object> createOrdererPolicies(boolean blockValidation){
         Map<String,Object> policies = new HashMap<>();
 
@@ -3765,6 +3815,11 @@ public class Blockchain {
         
         return policies;
     }
+    /**
+     * Creates the organization policies map.
+     * @param mspId the MSP ID
+     * @return the map of policies
+     */
     private static Map<String,Object> createOrgPolicies(String mspId) {
         Map<String,Object> policies = new HashMap<>();
 
@@ -3802,9 +3857,7 @@ public class Blockchain {
                 + "sed -i 's/2_5/2_0/g' configtx.yaml");
     }
     
-    /**
-     * This method is used to install all the binaries needed for the creation of the genesis block
-     */
+    
     /**
      * Scarica i binari necessari per la generazione del genesis block (configtxgen, configtxlator, ecc.).
      */
@@ -3814,9 +3867,9 @@ public class Blockchain {
                 + "tar -xvzf fabric-bin.tar.gz --strip-components=1");
     }
     /**
-     * Aggiunge i consenters (orderer) al docker-compose per il canale specificato.
-     * @param channel_name nome del canale
-     * @throws IOException in caso di errori I/O
+     * Adds the consenters (orderers) to the docker-compose for the specified channel.
+     * @param channel_name the name of the channel
+     * @throws IOException in case of I/O errors
      */
     private static void addConsentersDocker() throws IOException{
         if(intermediate){
@@ -3914,9 +3967,7 @@ public class Blockchain {
             // Leggi output standard (se necessario, decommentare il ciclo di lettura)
             String line;
             System.out.println(">>> Comando: " + bashCommand);
-            /*while ((line = reader.readLine()) != null) {
-                System.out.println(line);
-            }*/
+            
 
             // Leggi eventuali errori
             BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
@@ -4087,6 +4138,14 @@ public class Blockchain {
         }
     }
 
+    /**
+     * Creates chaincode for one peer.
+     * @param channelName the name of the channel
+     * @param org_name the name of the organization
+     * @param peer the peer name
+     * @param port the port number
+     * @throws IOException in case of I/O errors
+     */
     private static void create_chaincode_for_one_peer(String channelName, String org_name, String peer, int port) throws IOException {
         executeWSLCommand("cd "+mainDirectory+" &&"
                 + "mkdir atcc && cd atcc &&"
@@ -4167,11 +4226,14 @@ public class Blockchain {
                 +"--tlsRootCertFiles "+(intermediate ? "/etc/hyperledger/fabric/tls/ca-chain.pem" : "/etc/hyperledger/fabric/tls/tls-ca-cert.pem")+" '");
 
         //Invoke chaincode
-        /*executeWSLCommand("cd "+mainDirectory+" &&"
-                +"peer chaincode invoke "
-                +"-o 127.0.0.1:7050 -C "+channelName+" -n mycc -c '{\"Args\":[\"init\",\"a\",\"100\",\"b\",\"200\"]}' --isInit");*/
     }
 
+    /**
+     * Updates the anchor peer for the organization.
+     * @param channel_name the name of the channel
+     * @param org_name the name of the organization
+     * @param peer the peer name
+     */
     private static void AnchorPeerUpdate(String channel_name, String org_name, String peer){
         executeWSLCommand("cd "+mainDirectory+"/bin &&"
             +" ./configtxgen -profile SampleAppChannelEtcdRaft -outputAnchorPeersUpdate "+org_name+"Anchors.tx "
@@ -4196,6 +4258,10 @@ public class Blockchain {
         }
     }
 
+    /**
+     * Checks if Go is installed by running 'go version'.
+     * @return true if Go is installed, false otherwise
+     */
     private static boolean check_go(){
         String output= executeWSLCommandToString("go version");
         if(output !=null && output.contains("go version")){
@@ -4204,6 +4270,12 @@ public class Blockchain {
         return false;
     }
 
+    /**
+     * Installs Go using apt in WSL.
+     * @param pin the sudo password
+     * @throws IOException in case of I/O errors
+     * @throws InterruptedException if the process is interrupted
+     */
     private static void installGo(String pin) throws IOException, InterruptedException{
         ProcessBuilder pb = new ProcessBuilder(
                 "wsl.exe", "--", "sudo", "-S", "sh", "-c", "sudo apt install golang-go"
