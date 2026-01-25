@@ -1,0 +1,176 @@
+Organizations:
+- &id001
+  Name: org2
+  SkipAsForeign: false
+  ID: org2
+  MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Project/organizations/peerOrganizations/org2/msp
+  Policies:
+    Writers:
+      Type: ImplicitMeta
+      Rule: ANY Writers
+    Endorsement:
+      Type: ImplicitMeta
+      Rule: ANY Endorsers
+    Admins:
+      Type: ImplicitMeta
+      Rule: MAJORITY Admins
+    Readers:
+      Type: ImplicitMeta
+      Rule: ANY Readers
+  OrdererEndpoints:
+  - orderer1.example.com:5050
+  AnchorPeers:
+  - Port: 10051
+    Host: peer3.org2
+- &id002
+  Policies:
+    Writers:
+      Type: Signature
+      Rule: OR('Consenters.member')
+    Endorsement:
+      Type: Signature
+      Rule: OR('Consenters.member')
+    Admins:
+      Type: Signature
+      Rule: OR('Consenters.admin')
+    Readers:
+      Type: Signature
+      Rule: OR('Consenters.member')
+  OrdererEndpoints:
+  - orderer1.example.com:5050
+  ID: Consenters
+  Name: Consenters
+  MSPDir: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Project/organizations/ordererOrganizations/Consenters/msp
+Capabilities:
+  Channel:
+    V2_0: true
+  Orderer:
+    V2_0: true
+  Application:
+    V2_0: true
+Application:
+  ACLs:
+    _lifecycle/CheckCommitReadiness: /Channel/Application/Writers
+    _lifecycle/CommitChaincodeDefinition: /Channel/Application/Writers
+    _lifecycle/QueryChaincodeDefinition: /Channel/Application/Writers
+    _lifecycle/QueryChaincodeDefinitions: /Channel/Application/Writers
+    lscc/ChaincodeExists: /Channel/Application/Readers
+    lscc/GetDeploymentSpec: /Channel/Application/Readers
+    lscc/GetChaincodeData: /Channel/Application/Readers
+    lscc/GetInstantiatedChaincodes: /Channel/Application/Readers
+    qscc/GetChainInfo: /Channel/Application/Readers
+    qscc/GetBlockByNumber: /Channel/Application/Readers
+    qscc/GetBlockByHash: /Channel/Application/Readers
+    qscc/GetTransactionByID: /Channel/Application/Readers
+    qscc/GetBlockByTxID: /Channel/Application/Readers
+    cscc/GetConfigBlock: /Channel/Application/Readers
+    cscc/GetChannelConfig: /Channel/Application/Readers
+    peer/Propose: /Channel/Application/Writers
+    peer/ChaincodeToChaincode: /Channel/Application/Writers
+    event/Block: /Channel/Application/Readers
+    event/FilteredBlock: /Channel/Application/Readers
+  Organizations:
+  - *id001
+  - *id002
+  Policies:
+    LifecycleEndorsement:
+      Type: ImplicitMeta
+      Rule: MAJORITY Endorsement
+    Endorsement:
+      Type: ImplicitMeta
+      Rule: MAJORITY Endorsement
+    Readers:
+      Type: ImplicitMeta
+      Rule: ANY Readers
+    Writers:
+      Type: ImplicitMeta
+      Rule: ANY Writers
+    Admins:
+      Type: ImplicitMeta
+      Rule: MAJORITY Admins
+  Capabilities: &id005
+    V2_0: true
+Orderer: &id006
+  OrdererType: etcdraft
+  Addresses:
+  - orderer1.example.com:5050
+  BatchTimeout: 2s
+  BatchSize:
+    MaxMessageCount: 500
+    AbsoluteMaxBytes: 10 MB
+    PreferredMaxBytes: 2 MB
+  MaxChannels: 0
+  Kafka:
+    Brokers:
+    - kafka0:9092
+    - kafka1:9092
+    - kafka2:9092
+  EtcdRaft:
+    Consenters:
+    - ClientTLSCert: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Project/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/tls/signcerts/cert.pem
+      port: 5050
+      Host: orderer1.example.com
+      ServerTLSCert: /mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/Project/organizations/ordererOrganizations/Consenters/orderers/orderer1.example.com/tls/signcerts/cert.pem
+  Organizations:
+  - *id002
+  Policies:
+    Readers:
+      Type: ImplicitMeta
+      Rule: ANY Readers
+    Writers:
+      Type: ImplicitMeta
+      Rule: ANY Writers
+    Admins:
+      Type: ImplicitMeta
+      Rule: MAJORITY Admins
+    BlockValidation:
+      Type: ImplicitMeta
+      Rule: ANY Writers
+  Capabilities:
+    V2_0: true
+Channel:
+  Policies: &id003
+    Readers:
+      Type: ImplicitMeta
+      Rule: ANY Readers
+    Writers:
+      Type: ImplicitMeta
+      Rule: ANY Writers
+    Admins:
+      Type: ImplicitMeta
+      Rule: MAJORITY Admins
+  Capabilities: &id004
+    V2_0: true
+Profiles:
+  SampleAppChannelEtcdRaft:
+    Policies: *id003
+    Capabilities: *id004
+    Application: &id007
+      Organizations:
+      - *id001
+      Policies:
+        Writers:
+          Type: ImplicitMeta
+          Rule: ANY Writers
+        Endorsement:
+          Type: ImplicitMeta
+          Rule: ANY Endorsers
+        Admins:
+          Type: ImplicitMeta
+          Rule: MAJORITY Admins
+        Readers:
+          Type: ImplicitMeta
+          Rule: ANY Readers
+      Capabilities: *id005
+    Orderer: *id006
+    Consortium: SampleConsortium
+  OrdererGenesis:
+    Policies: *id003
+    Consortiums:
+      SampleConsortium:
+        Organizations:
+        - *id001
+        - *id002
+    Application: *id007
+    Capabilities: *id004
+    Orderer: *id006
