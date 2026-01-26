@@ -133,7 +133,18 @@ public class Blockchain {
                         FileWriter fw = new FileWriter(projects, true);
                         fw.write(mainDirectory+" "+(intermediate ? "intermediate":"root")+"\n");
                         fw.close();
-                        String yourPin="simone03";
+                        Console console = System.console();
+                        System.out.println("Insert sudo password for WSL:");
+                        String yourPin;
+                        if (console != null) {
+                            yourPin = new String(console.readPassword("Password: "));
+                        } else {
+                            // Fallback per IDE: la password sarà purtroppo visibile
+                            System.out.print("Password (visibile nell'IDE): ");
+                            yourPin = in.nextLine();
+                        }
+                        
+                        
                         createDirectory(mainDirectory);
                         setupCA(yourPin);
                         
@@ -2631,10 +2642,12 @@ public class Blockchain {
         String mspPath=path+"/"+mainDirectory+"/organizations/peerOrganizations/"+org_name+"/peers/"+peer_name+"/msp";
         String cfgPath=path+"/"+mainDirectory+"/peers_bin/"+peer_name+"/config";
         String tlsPath=path+"/"+mainDirectory+"/organizations/peerOrganizations/"+org_name+"/peers/"+peer_name+"/tls";
+        String rootPath=path+"/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem";
+        String chainPath=path+"/"+mainDirectory+"/fabric-ca-server-int-ca/ca-chain.pem";
         LinkedList<Integer> ports= new LinkedList<Integer>();
         boolean cDB=false;
         //Aggiunta del peer al file docker-compose.yaml
-        add_peer_to_docker(peer_name,org_name,cfgPath,mspAdminPath, mspPath ,tlsPath,ports, cDB, tlsEnabled, bootstrap, peer_number);
+        add_peer_to_docker(peer_name,org_name,cfgPath,mspAdminPath, mspPath ,tlsPath,rootPath,chainPath,ports, cDB, tlsEnabled, bootstrap, peer_number);
         
         System.out.println("Starting the peer...");
         new peerThread(peer_name, cDB, mainDirectory);
@@ -3306,7 +3319,7 @@ public class Blockchain {
      * @param peer_number the peer number
      * @throws IOException in case of I/O errors
      */
-    private static void add_peer_to_docker(String peerName, String org_name, String cfgPath, String mspAdminPath ,String mspPath, String tlsPath, LinkedList<Integer> ports, boolean couchDB, boolean tls_enabled, String bootstrap, int peer_number) throws IOException{
+    private static void add_peer_to_docker(String peerName, String org_name, String cfgPath, String mspAdminPath ,String mspPath, String tlsPath, String rootPath, String chainPath, LinkedList<Integer> ports, boolean couchDB, boolean tls_enabled, String bootstrap, int peer_number) throws IOException{
         Yaml yaml = new Yaml();
         File file = new File(mainDirectory + "/docker-compose.yaml");
 
@@ -3369,9 +3382,9 @@ public class Blockchain {
         volumes.add(mspPath + ":/etc/hyperledger/fabric/msp");
         volumes.add(tlsPath + ":/etc/hyperledger/fabric/tls");
         volumes.add("/var/run/docker.sock:/var/run/docker.sock");
-        volumes.add("/mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/"+mainDirectory+"/fabric-ca-client/tls-root-cert/tls-ca-cert.pem:/etc/hyperledger/fabric/tls/tls-ca-cert.pem");
+        volumes.add(rootPath + ":/etc/hyperledger/fabric/tls/tls-ca-cert.pem");
         if(intermediate){
-            volumes.add("/mnt/c/Users/simo0/OneDrive/Documenti/NetBeansProjects/blockchain/"+mainDirectory+"/fabric-ca-server-int-ca/ca-chain.pem:/etc/hyperledger/fabric/tls/ca-chain.pem");
+            volumes.add(chainPath + ":/etc/hyperledger/fabric/tls/ca-chain.pem");
         }
         peerConfig.put("volumes", volumes);
         
