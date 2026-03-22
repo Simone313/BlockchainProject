@@ -1582,12 +1582,7 @@ public class Blockchain {
                     for(int i=0;i<pOr.size();i++){
                         System.out.println((i+1)+") "+pOr.get(i).split("/")[1]);  
                     }
-                    System.out.println(pOr.size()+") Exit");
-                    System.out.print("--> "+RESET);
                     int org_choice=in.nextInt();
-                    if(org_choice==pOr.size()){
-                        break;
-                    }
                     String organization_name=pOr.get(org_choice-1);
                     int peer_number=get_num_peers(organization_name.split("/")[1]);
                     organizationMenu(organization_name.split("/")[1],peer_number+1);
